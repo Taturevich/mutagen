@@ -3,7 +3,7 @@ using MutationFramework.Sdk;
 
 if (args.Length == 0 || args.Contains("--help") || args.Contains("-h"))
 {
-    Console.WriteLine("mutate run --project <csproj> --tests <csproj[,csproj]> [--workers N] [--output DIR] [--report json,html] [--timeout seconds] [--filter text]\nmutate discover --project <csproj>\nmutate plan --project <csproj> --tests <csproj>\nmutate report <report.json>");
+    Console.WriteLine("mutate run --project <csproj> --tests <csproj[,csproj]> [--workers N] [--execution-mode auto|isolated|batched] [--output DIR] [--report json,html] [--timeout seconds] [--filter text]\nmutate discover --project <csproj> --tests <csproj>\nmutate plan --project <csproj> --tests <csproj> [--execution-mode auto|isolated|batched] [--output DIR]\nmutate report <report.json>");
     return 0;
 }
 
@@ -23,7 +23,6 @@ try
     }
     if (command is not ("run" or "discover" or "plan")) throw new ArgumentException($"Unknown command '{command}'.");
     if (!values.TryGetValue("project", out var project)) throw new ArgumentException("--project is required.");
-    if (command == "discover") { Console.WriteLine($"Project: {Path.GetFullPath(project)}"); Console.WriteLine("Discovery runs as part of mutate run; use --verbose for diagnostics."); return 0; }
     if (!values.TryGetValue("tests", out var tests)) throw new ArgumentException("--tests is required.");
     var options = new MutationOptions
     {
@@ -33,11 +32,19 @@ try
         OutputDirectory = values.GetValueOrDefault("output", "mutation-results"),
         Report = values.GetValueOrDefault("report", "json,html"),
         TimeoutSeconds = values.TryGetValue("timeout", out var timeout) ? int.Parse(timeout) : 120,
+        ExecutionMode = values.TryGetValue("execution-mode", out var executionMode) && Enum.TryParse<MutationExecutionMode>(executionMode, true, out var parsedMode) ? parsedMode : MutationExecutionMode.Auto,
         TestFilter = values.GetValueOrDefault("filter"), Include = values.GetValueOrDefault("include"), Exclude = values.GetValueOrDefault("exclude")
     };
-    var result = await MutationEngine.RunAsync(options);
-    if (command == "plan") Console.WriteLine($"Planned {result.Mutants.Count} mutants; covered {result.Mutants.Count(x => x.Status != MutationStatus.NoCoverage)}; uncovered {result.NoCoverageCount}.");
-    return result.OverallStatus == "Completed" ? 0 : 5;
+    if (values.ContainsKey("execution-mode") && !Enum.TryParse<MutationExecutionMode>(values["execution-mode"], true, out _)) throw new ArgumentException("--execution-mode must be auto, isolated, or batched.");
+    if (command == "discover")
+    {
+        var result = await MutationEngine.DiscoverAsync(options);
+        Console.WriteLine(JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }));
+        return 0;
+    }
+    var run = command == "plan" ? await MutationEngine.PlanAsync(options) : await MutationEngine.RunAsync(options);
+    if (command == "plan") Console.WriteLine($"Planned {run.Mutants.Count} mutants; covered {run.Counters.CoveredMutants}; uncovered {run.NoCoverageCount}. Plan report: {run.JsonReportPath}");
+    return run.OverallStatus is "Completed" or "Planned" ? 0 : 5;
 }
 catch (ArgumentException ex) { Console.Error.WriteLine(ex.Message); return 2; }
 catch (BaselineFailureException ex) { Console.Error.WriteLine(ex.Message); foreach (var e in ex.Errors) Console.Error.WriteLine(e); return 3; }

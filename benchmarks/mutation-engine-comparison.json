@@ -1,0 +1,327 @@
+﻿{
+    "schemaVersion":  1,
+    "measuredAtUtc":  "2026-11-14",
+    "environment":  {
+                        "os":  "Microsoft Windows 10.0.19045 ",
+                        "runtime":  ".NET 11.0.0",
+                        "sdk":  "11.0.100",
+                        "configuration":  "Debug",
+                        "targetFramework":  "net11.0",
+                        "machineProcessor":  "Intel(R) Core(TM) i7-7500U CPU @ 2.70GHz"
+                    },
+    "originalWorkload":  {
+                             "candidates":  13,
+                             "outcomes":  {
+                                              "killed":  9,
+                                              "survived":  3,
+                                              "uncovered":  1
+                                          },
+                             "perWorker":  [
+                                               {
+                                                   "mutationTestExecutions":  20,
+                                                   "maxWallMs":  66430,
+                                                   "baselineTestExecutions":  6,
+                                                   "workers":  1,
+                                                   "medianWallMs":  66336,
+                                                   "minWallMs":  65454,
+                                                   "iterations":  3,
+                                                   "reportedAndDerivedRunnerStarts":  27
+                                               },
+                                               {
+                                                   "mutationTestExecutions":  20,
+                                                   "maxWallMs":  47901,
+                                                   "baselineTestExecutions":  6,
+                                                   "workers":  2,
+                                                   "medianWallMs":  47515,
+                                                   "minWallMs":  47134,
+                                                   "iterations":  3,
+                                                   "reportedAndDerivedRunnerStarts":  27
+                                               },
+                                               {
+                                                   "mutationTestExecutions":  20,
+                                                   "maxWallMs":  43367,
+                                                   "baselineTestExecutions":  6,
+                                                   "workers":  4,
+                                                   "medianWallMs":  43134,
+                                                   "minWallMs":  42293,
+                                                   "iterations":  3,
+                                                   "reportedAndDerivedRunnerStarts":  27
+                                               }
+                                           ]
+                         },
+    "optimizedSameWorkload":  {
+                                  "candidates":  13,
+                                  "outcomes":  {
+                                                   "killed":  9,
+                                                   "survived":  3,
+                                                   "uncovered":  1
+                                               },
+                                  "note":  "Three runs per worker on the exact original production and test fixture from repository HEAD.",
+                                  "perWorker":  [
+                                                    {
+                                                        "workers":  1,
+                                                        "iterations":  3,
+                                                        "medianWallMs":  23020,
+                                                        "minWallMs":  22847,
+                                                        "maxWallMs":  24608,
+                                                        "wallReductionPercent":  65.3,
+                                                        "baselineTestExecutions":  8,
+                                                        "mutationTestExecutions":  17,
+                                                        "controllerStarts":  2,
+                                                        "testHostStarts":  26,
+                                                        "observedProcessStarts":  30
+                                                    },
+                                                    {
+                                                        "workers":  2,
+                                                        "iterations":  3,
+                                                        "medianWallMs":  18799,
+                                                        "minWallMs":  18713,
+                                                        "maxWallMs":  18861,
+                                                        "wallReductionPercent":  60.4,
+                                                        "baselineTestExecutions":  8,
+                                                        "mutationTestExecutions":  17,
+                                                        "controllerStarts":  3,
+                                                        "testHostStarts":  26,
+                                                        "observedProcessStarts":  31
+                                                    },
+                                                    {
+                                                        "workers":  4,
+                                                        "iterations":  3,
+                                                        "medianWallMs":  18844,
+                                                        "minWallMs":  18828,
+                                                        "maxWallMs":  19164,
+                                                        "wallReductionPercent":  56.3,
+                                                        "baselineTestExecutions":  8,
+                                                        "mutationTestExecutions":  17,
+                                                        "controllerStarts":  5,
+                                                        "testHostStarts":  26,
+                                                        "observedProcessStarts":  33
+                                                    }
+                                                ]
+                              },
+    "expandedRegressionWorkload":  {
+                                       "candidates":  18,
+                                       "tests":  18,
+                                       "outcomes":  {
+                                                        "killed":  10,
+                                                        "survived":  7,
+                                                        "uncovered":  1
+                                                    },
+                                       "executionModeMatrix":  [
+                                                                   {
+                                                                       "executionMode":  "isolated",
+                                                                       "workers":  1,
+                                                                       "iterations":  3,
+                                                                       "medianWallClockMs":  34110,
+                                                                       "minWallClockMs":  33782,
+                                                                       "maxWallClockMs":  34731,
+                                                                       "medianEngineTotalMs":  32919,
+                                                                       "medianBaselineMs":  11837,
+                                                                       "medianMutationExecutionMs":  15597,
+                                                                       "medianProcessStarts":  46,
+                                                                       "medianTestRunnerStarts":  2,
+                                                                       "medianTestHostStarts":  42,
+                                                                       "medianMutationBatches":  17
+                                                                   },
+                                                                   {
+                                                                       "executionMode":  "isolated",
+                                                                       "workers":  2,
+                                                                       "iterations":  3,
+                                                                       "medianWallClockMs":  28215,
+                                                                       "minWallClockMs":  28151,
+                                                                       "maxWallClockMs":  28228,
+                                                                       "medianEngineTotalMs":  27041,
+                                                                       "medianBaselineMs":  11924,
+                                                                       "medianMutationExecutionMs":  9966,
+                                                                       "medianProcessStarts":  47,
+                                                                       "medianTestRunnerStarts":  3,
+                                                                       "medianTestHostStarts":  42,
+                                                                       "medianMutationBatches":  17
+                                                                   },
+                                                                   {
+                                                                       "executionMode":  "isolated",
+                                                                       "workers":  4,
+                                                                       "iterations":  3,
+                                                                       "medianWallClockMs":  27343,
+                                                                       "minWallClockMs":  27335,
+                                                                       "maxWallClockMs":  28996,
+                                                                       "medianEngineTotalMs":  26155,
+                                                                       "medianBaselineMs":  12045,
+                                                                       "medianMutationExecutionMs":  9010,
+                                                                       "medianProcessStarts":  49,
+                                                                       "medianTestRunnerStarts":  5,
+                                                                       "medianTestHostStarts":  42,
+                                                                       "medianMutationBatches":  17
+                                                                   },
+                                                                   {
+                                                                       "executionMode":  "batched",
+                                                                       "workers":  1,
+                                                                       "iterations":  3,
+                                                                       "medianWallClockMs":  34200,
+                                                                       "minWallClockMs":  33771,
+                                                                       "maxWallClockMs":  35687,
+                                                                       "medianEngineTotalMs":  33010,
+                                                                       "medianBaselineMs":  11905,
+                                                                       "medianMutationExecutionMs":  15696,
+                                                                       "medianProcessStarts":  46,
+                                                                       "medianTestRunnerStarts":  2,
+                                                                       "medianTestHostStarts":  42,
+                                                                       "medianMutationBatches":  6
+                                                                   },
+                                                                   {
+                                                                       "executionMode":  "batched",
+                                                                       "workers":  2,
+                                                                       "iterations":  3,
+                                                                       "medianWallClockMs":  28367,
+                                                                       "minWallClockMs":  28234,
+                                                                       "maxWallClockMs":  28421,
+                                                                       "medianEngineTotalMs":  27196,
+                                                                       "medianBaselineMs":  12056,
+                                                                       "medianMutationExecutionMs":  10037,
+                                                                       "medianProcessStarts":  47,
+                                                                       "medianTestRunnerStarts":  3,
+                                                                       "medianTestHostStarts":  42,
+                                                                       "medianMutationBatches":  6
+                                                                   },
+                                                                   {
+                                                                       "executionMode":  "batched",
+                                                                       "workers":  4,
+                                                                       "iterations":  3,
+                                                                       "medianWallClockMs":  27571,
+                                                                       "minWallClockMs":  27273,
+                                                                       "maxWallClockMs":  27713,
+                                                                       "medianEngineTotalMs":  26384,
+                                                                       "medianBaselineMs":  11933,
+                                                                       "medianMutationExecutionMs":  9345,
+                                                                       "medianProcessStarts":  49,
+                                                                       "medianTestRunnerStarts":  5,
+                                                                       "medianTestHostStarts":  42,
+                                                                       "medianMutationBatches":  8
+                                                                   },
+                                                                   {
+                                                                       "executionMode":  "auto",
+                                                                       "workers":  1,
+                                                                       "iterations":  3,
+                                                                       "medianWallClockMs":  33887,
+                                                                       "minWallClockMs":  33777,
+                                                                       "maxWallClockMs":  34781,
+                                                                       "medianEngineTotalMs":  32692,
+                                                                       "medianBaselineMs":  11934,
+                                                                       "medianMutationExecutionMs":  15493,
+                                                                       "medianProcessStarts":  46,
+                                                                       "medianTestRunnerStarts":  2,
+                                                                       "medianTestHostStarts":  42,
+                                                                       "medianMutationBatches":  17
+                                                                   },
+                                                                   {
+                                                                       "executionMode":  "auto",
+                                                                       "workers":  2,
+                                                                       "iterations":  3,
+                                                                       "medianWallClockMs":  28274,
+                                                                       "minWallClockMs":  28196,
+                                                                       "maxWallClockMs":  28288,
+                                                                       "medianEngineTotalMs":  27079,
+                                                                       "medianBaselineMs":  11943,
+                                                                       "medianMutationExecutionMs":  9926,
+                                                                       "medianProcessStarts":  47,
+                                                                       "medianTestRunnerStarts":  3,
+                                                                       "medianTestHostStarts":  42,
+                                                                       "medianMutationBatches":  17
+                                                                   },
+                                                                   {
+                                                                       "executionMode":  "auto",
+                                                                       "workers":  4,
+                                                                       "iterations":  3,
+                                                                       "medianWallClockMs":  27126,
+                                                                       "minWallClockMs":  27075,
+                                                                       "maxWallClockMs":  27476,
+                                                                       "medianEngineTotalMs":  25928,
+                                                                       "medianBaselineMs":  11937,
+                                                                       "medianMutationExecutionMs":  8882,
+                                                                       "medianProcessStarts":  49,
+                                                                       "medianTestRunnerStarts":  5,
+                                                                       "medianTestHostStarts":  42,
+                                                                       "medianMutationBatches":  17
+                                                                   }
+                                                               ]
+                                   },
+    "scaleFixture":  {
+                         "mutants":  200,
+                         "tests":  100,
+                         "workers":  4,
+                         "iterations":  1,
+                         "isolated":  {
+                                          "wallClockMs":  159503,
+                                          "killed":  100,
+                                          "survived":  100,
+                                          "uncovered":  0,
+                                          "batches":  200,
+                                          "baselineTestExecutions":  100,
+                                          "mutationTestExecutions":  300,
+                                          "testHostStarts":  401,
+                                          "processStarts":  408
+                                      },
+                         "batched":  {
+                                         "wallClockMs":  160101,
+                                         "killed":  100,
+                                         "survived":  100,
+                                         "uncovered":  0,
+                                         "batches":  8,
+                                         "averageMutantsPerBatch":  25,
+                                         "baselineTestExecutions":  100,
+                                         "mutationTestExecutions":  300,
+                                         "testHostStarts":  401,
+                                         "processStarts":  408
+                                     },
+                         "note":  "One real end-to-end run per mode; identical 100/100 classifications and test executions. Peak memory not captured."
+                     },
+    "controlsAndLimits":  {
+                              "originalEngineProcessStarts":  "27 direct dotnet test launches, derived from the per-mutant report test invocations plus one test-discovery launch; this predates direct OS process counters.",
+                              "optimizedProcessStarts":  "Engine-observed direct process starts, persistent VSTest controller starts, and testhost launches; does not count transitive MSBuild/compiler child process launches.",
+                              "timing":  "Original engine reported baseline and coverage durations with overlap; use total wall duration for original-versus-optimized comparison. Optimized phases separate baseline, probe serialization, and coverage mapping.",
+                              "peakMemory":  null,
+                              "mutationExecutionBatches":  "Conflict-graph scheduling groups compatible mutant execution units, but each mutant still runs separately with its own activation and covering tests; batching does not combine mutants inside a testhost.",
+                              "stryker":  "Final 2026-11-14 three-run comparison: expanded 18-test sample, concurrency four; 29 generated, 27 tested, status details in finalStryker. Median 27.365 s (27.159-28.574); process starts not measured. Candidate sets differ."
+                          },
+    "finalStryker":  {
+                         "version":  "5.1.0",
+                         "date":  "2026-11-14",
+                         "environment":  {
+                                             "os":  "Microsoft Windows 10.0.19045",
+                                             "sdk":  "11.0.100",
+                                             "targetFramework":  "net11.0",
+                                             "configuration":  "Debug",
+                                             "processor":  "Intel(R) Core(TM) i7-7500U CPU @ 2.70GHz",
+                                             "concurrency":  4
+                                         },
+                         "workload":  {
+                                          "tests":  18,
+                                          "generatedMutants":  29,
+                                          "testedMutants":  27,
+                                          "statuses":  {
+                                                           "killed":  19,
+                                                           "survived":  8,
+                                                           "ignored":  1,
+                                                           "noCoverage":  1
+                                                       },
+                                          "reportedMutationScorePercent":  67.86
+                                      },
+                         "iterations":  3,
+                         "wallClockSeconds":  [
+                                                  27.3649379,
+                                                  27.1590696,
+                                                  28.5742708
+                                              ],
+                         "medianWallClockSeconds":  27.3649379,
+                         "minimumWallClockSeconds":  27.1590696,
+                         "maximumWallClockSeconds":  28.5742708,
+                         "processStarts":  null,
+                         "processStartNote":  "Not measured for Stryker",
+                         "reportPaths":  [
+                                             "artifacts/benchmark/final-stryker/run-1/reports/mutation-report.json",
+                                             "artifacts/benchmark/final-stryker/run-2/reports/mutation-report.json",
+                                             "artifacts/benchmark/final-stryker/run-3/reports/mutation-report.json"
+                                         ],
+                         "comparisonNote":  "Mutagen expanded workload: 18 candidates, 10 killed, 7 survived, 1 uncovered; 27.126 s median at 4 workers in a three-run auto-mode matrix. Candidate sets and mutation operators differ, so these timings are workload-specific."
+                     }
+}
