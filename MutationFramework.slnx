@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="src/MutationFramework.Cli/MutationFramework.Cli.csproj" />
+  <Project Path="samples/SampleApplication/SampleApplication.csproj" />
+  <Project Path="samples/SampleApplication.Tests/SampleApplication.Tests.csproj" />
+  <Project Path="samples/SdkSample/SdkSample.csproj" />
+</Solution>

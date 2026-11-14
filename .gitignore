@@ -1,0 +1,8 @@
+**/bin/
+**/obj/
+mutation-results/
+mutation-results-sdk/
+temp-test*/
+.mutation-work/
+/.tools/
+/artifacts/benchmark/
