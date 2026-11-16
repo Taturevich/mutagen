@@ -569,6 +569,34 @@ public sealed class MutationEngineIntegrationTests
   }
 
   [Test]
+  public void CacheEnvironmentFingerprintIgnoresRandomCommandWrapperPathEntries()
+  {
+    var root = Path.Combine(Path.GetTempPath(), "MutagenCommandPathFingerprint", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(root);
+    var firstWrapper = Path.Combine(root, "codex-arg0first");
+    var secondWrapper = Path.Combine(root, "codex-arg0second");
+    Directory.CreateDirectory(firstWrapper);
+    Directory.CreateDirectory(secondWrapper);
+    var originalPath = Environment.GetEnvironmentVariable("PATH");
+    try
+    {
+      Environment.SetEnvironmentVariable("PATH", firstWrapper);
+      var first = Engine.EnvironmentFingerprint();
+      Environment.SetEnvironmentVariable("PATH", secondWrapper);
+
+      Assert.That(Engine.EnvironmentFingerprint(), Is.EqualTo(first));
+    }
+    finally
+    {
+      Environment.SetEnvironmentVariable("PATH", originalPath);
+      if (Directory.Exists(root))
+      {
+        Directory.Delete(root, true);
+      }
+    }
+  }
+
+  [Test]
   public void CacheEnvironmentFingerprintPreservesDotnetPathSelectionOrder()
   {
     var root = Path.Combine(Path.GetTempPath(), "MutagenSdkPathFingerprint", Guid.NewGuid().ToString("N"));
