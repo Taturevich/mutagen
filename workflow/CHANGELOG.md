@@ -293,3 +293,7 @@
 - Extended the explicit three-run large SQLite benchmark to include PerMutant with the same 2,000 mutants, 100 tests, shard locks, and pinned Stryker differential checks. This supplies the missing matched large-workload comparison; no new performance result is claimed until it runs.
 - Corrected stale sample mutation-count expectations after adding source-derived candidates. The full earlier run passed 84 engine tests and failed only the stale count assertion; focused updated execution-policy tests passed 5/5, and the solution build completed with zero warnings/errors.
 
+# 2026-11-16 - Verify shared-host baseline coverage and current mutation counts
+- Updated the sample cache-baseline oracle to recognize the in-process coverage signal as well as file-based probes, so it verifies baseline execution under both host policies. The cache invalidation/baseline test now passes.
+- Reconciled the sample E2E expectations with the current schema: 34 discovered mutants, 33 covered mutants in the execution plan, and 25 killed, 8 survived, 1 no coverage. The focused cache, isolation-mode equivalence, and host-policy checks passed (3 tests); the full solution test run remains to be repeated against the rebuilt tree.
+

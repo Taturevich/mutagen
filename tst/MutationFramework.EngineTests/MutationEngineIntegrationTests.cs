@@ -4528,7 +4528,7 @@ public sealed class MutationEngineIntegrationTests
         Assert.That(result.ExecutionProfiles.All(profile => profile.FixtureAffinity != null), Is.True);
         Assert.That(result.ExecutionPlan!.SelectedMode, Is.EqualTo(mode == MutationExecutionMode.Auto ? MutationExecutionMode.Isolated : mode));
         Assert.That(result.Counters.MutationBatches, Is.EqualTo(result.ExecutionPlan.Batches.Count));
-        Assert.That(result.ExecutionPlan.Batches.SelectMany(batch => batch.MutantIds).Distinct(StringComparer.Ordinal).Count(), Is.EqualTo(31));
+        Assert.That(result.ExecutionPlan.Batches.SelectMany(batch => batch.MutantIds).Distinct(StringComparer.Ordinal).Count(), Is.EqualTo(33));
         Assert.That(result.Counters.TestHostProcessStarts, Is.EqualTo(isolation == TestHostIsolationPolicy.PerBatch
             ? result.Counters.MutationBatches + 2
             : result.Counters.TotalTests + result.Counters.MutationTestExecutions + 1));

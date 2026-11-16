@@ -9,7 +9,9 @@ public sealed class CalculatorTests
   public void Add_ReturnsCorrectSum()
   {
     var marker = Environment.GetEnvironmentVariable("MUTAGEN_COVERAGE_BASELINE_MARKER");
-    if (!string.IsNullOrWhiteSpace(marker) && !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("MUTATION_PROBE_FILE")))
+    if (!string.IsNullOrWhiteSpace(marker) &&
+        (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("MUTATION_PROBE_FILE")) ||
+         Environment.GetEnvironmentVariable("MUTATION_PER_TEST_COVERAGE") == "1"))
     {
       File.AppendAllText(marker, "baseline" + Environment.NewLine);
     }
