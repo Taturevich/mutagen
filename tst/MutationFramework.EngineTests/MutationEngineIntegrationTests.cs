@@ -4726,6 +4726,7 @@ public sealed class MutationEngineIntegrationTests
       Mutators = new HashSet<string>(["binary-operators"], StringComparer.Ordinal),
       MaxWorkers = 4,
       TimeoutSeconds = 120,
+      TestFilter = "SqliteShardExercisesTheSharedMutationSite",
       CacheDirectory = Path.Combine(root, "cache")
     };
 
@@ -4743,7 +4744,6 @@ public sealed class MutationEngineIntegrationTests
         return (IReadOnlyList<string>)[$"sqlite-shard-{group % 4}"];
       }, StringComparer.Ordinal);
       var independentSelected = discovery.Tests.ToArray();
-      Assert.That(independentSelected, Has.Length.EqualTo(2));
       Assert.That(independentSelected, Has.Length.EqualTo(2));
       async Task<MutationRunResult> RunIndependentResourcePolicy(TestHostIsolationPolicy isolationPolicy)
       {
