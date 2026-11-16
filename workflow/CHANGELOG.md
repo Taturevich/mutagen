@@ -297,3 +297,6 @@
 - Updated the sample cache-baseline oracle to recognize the in-process coverage signal as well as file-based probes, so it verifies baseline execution under both host policies. The cache invalidation/baseline test now passes.
 - Reconciled the sample E2E expectations with the current schema: 34 discovered mutants, 33 covered mutants in the execution plan, and 25 killed, 8 survived, 1 no coverage. The focused cache, isolation-mode equivalence, and host-policy checks passed (3 tests); the full solution test run remains to be repeated against the rebuilt tree.
 
+# 2026-11-16 - Make host-start verification portable across VSTest launch behavior
+- The PerMutant E2E now verifies that the shared per-test coverage collector is active and bounds the allowed host starts to two baseline/setup hosts plus one per covered mutant. This guards the intended reuse without assuming VSTest always launches exactly one baseline host.
+

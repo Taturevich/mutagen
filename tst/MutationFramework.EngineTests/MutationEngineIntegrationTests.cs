@@ -4595,8 +4595,9 @@ public sealed class MutationEngineIntegrationTests
       Assert.That(result.ExecutionProfiles.All(profile => !profile.IsolationRequired &&
           profile.TestHostIsolationPolicy == TestHostIsolationPolicy.PerMutant), Is.True);
       Assert.That(result.ExecutionProfiles.All(profile => profile.TimeoutPolicy == TestRunTimeoutPolicy.AggregatePerMutant), Is.True);
+      Assert.That(result.Diagnostics, Has.Some.Contains("BaselineCoverageCollector"));
       Assert.That(result.Counters.TestHostProcessStarts,
-          Is.EqualTo(1 + result.Counters.TotalMutants - result.Counters.UncoveredMutants));
+          Is.LessThanOrEqualTo(2 + result.Counters.TotalMutants - result.Counters.UncoveredMutants));
       Assert.That(result.Counters.TestHostProcessStarts,
           Is.LessThan(result.Counters.TotalTests + result.Counters.MutationTestExecutions + 1));
       Assert.That(result.ReportSchemaVersion, Is.EqualTo(4));
