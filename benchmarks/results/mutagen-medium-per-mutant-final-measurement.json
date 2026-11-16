@@ -1,0 +1,12 @@
+{
+    "policy":  "per-mutant",
+    "exitCode":  0,
+    "sampledWallClockMs":  161602,
+    "aggregatePeakWorkingSetBytes":  648867840,
+    "distinctObservedProcesses":  300,
+    "samplingIntervalMs":  500,
+    "reportPath":  "F:\\mutagen\\benchmarks\\results\\mutagen-medium-per-mutant-final",
+    "stdoutLog":  "F:\\mutagen\\benchmarks\\results\\mutagen-medium-per-mutant-final.stdout.log",
+    "stderrLog":  "F:\\mutagen\\benchmarks\\results\\mutagen-medium-per-mutant-final.stderr.log",
+    "reportStatus":  "Completed"
+}

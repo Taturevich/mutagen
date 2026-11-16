@@ -1,0 +1,1572 @@
+{
+    "reference":  {
+                      "tool":  "Stryker.NET",
+                      "version":  "5.0.0",
+                      "release":  "https://github.com/stryker-mutator/stryker-net/releases/tag/dotnet-stryker@5.0.0",
+                      "documentation":  "https://raw.githubusercontent.com/stryker-mutator/stryker-net/dotnet-stryker@5.0.0/docs/mutations.md",
+                      "operatorDocumentation":  "https://raw.githubusercontent.com/stryker-mutator/stryker-net/dotnet-stryker@5.0.0/docs/regex-mutations.md",
+                      "statusVocabulary":  [
+                                               "supported",
+                                               "unsupported"
+                                           ],
+                      "inventoryCompleteness":  "all-documented-table-rows",
+                      "inventoryNote":  "documentedTransformations is generated from every transformation table in the pinned mutations.md and regex-mutations.md files. sourceDerivedCases records additional behavior found in the pinned implementation source but omitted from the docs. Status is the current implementation status; docs do not enumerate every overload-specific variation."
+                  },
+    "summary":  {
+                    "documentedRows":  255,
+                    "supported":  253,
+                    "unsupported":  2
+                },
+    "sourceDerivedCases":  [
+                                {
+                                    "category":  "Mutation / Initialization (_initializer_)",
+                                    "from":  "stackalloc int[] { 1, 2 }",
+                                    "to":  "stackalloc int[] { }",
+                                    "status":  "supported",
+                                    "source":  "src/Stryker.Core/Stryker.Core/Mutators/ArrayCreationMutator.cs",
+                                    "note":  "The pinned ArrayCreationMutator clears non-empty stackalloc array initializers although this case is not present in the mutation documentation table."
+                                },
+                                {
+                                    "category":  "Mutation / Removal mutators (_statement_, _block_)",
+                                    "from":  "{ NestedCalls++; }",
+                                    "to":  "{ }",
+                                    "status":  "supported",
+                                    "source":  "src/Stryker.Core/Stryker.Core/Mutators/BlockMutator.cs",
+                                    "note":  "The pinned BlockMutator empties eligible nested blocks; the documentation table only illustrates method-body and statement removal."
+                                }
+                            ],
+    "documentedTransformations":  [
+                                      {
+                                          "category":  "Mutation / Arithmetic Operators (_arithmetic_)",
+                                          "from":  "+",
+                                          "to":  "-",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Arithmetic Operators (_arithmetic_)",
+                                          "from":  "-",
+                                          "to":  "+",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Arithmetic Operators (_arithmetic_)",
+                                          "from":  "*",
+                                          "to":  "/",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Arithmetic Operators (_arithmetic_)",
+                                          "from":  "/",
+                                          "to":  "*",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Arithmetic Operators (_arithmetic_)",
+                                          "from":  "%",
+                                          "to":  "*",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Equality Operators (_equality_)",
+                                          "from":  "\u003e",
+                                          "to":  "\u003c",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Equality Operators (_equality_)",
+                                          "from":  "\u003e",
+                                          "to":  "\u003e=",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Equality Operators (_equality_)",
+                                          "from":  "\u003e=",
+                                          "to":  "\u003c",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Equality Operators (_equality_)",
+                                          "from":  "\u003e=",
+                                          "to":  "\u003e",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Equality Operators (_equality_)",
+                                          "from":  "\u003c",
+                                          "to":  "\u003e",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Equality Operators (_equality_)",
+                                          "from":  "\u003c",
+                                          "to":  "\u003c=",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Equality Operators (_equality_)",
+                                          "from":  "\u003c=",
+                                          "to":  "\u003e",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Equality Operators (_equality_)",
+                                          "from":  "\u003c=",
+                                          "to":  "\u003c",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Equality Operators (_equality_)",
+                                          "from":  "==",
+                                          "to":  "!=",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Equality Operators (_equality_)",
+                                          "from":  "!=",
+                                          "to":  "==",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Equality Operators (_equality_)",
+                                          "from":  "is",
+                                          "to":  "is not",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Equality Operators (_equality_)",
+                                          "from":  "is not",
+                                          "to":  "is",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Logical Operators (_logical_)",
+                                          "from":  "\u0026\u0026",
+                                          "to":  "||",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Logical Operators (_logical_)",
+                                          "from":  "||",
+                                          "to":  "\u0026\u0026",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Logical Operators (_logical_)",
+                                          "from":  "^",
+                                          "to":  "==",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Logical Operators (_logical_)",
+                                          "from":  "and",
+                                          "to":  "or",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Logical Operators (_logical_)",
+                                          "from":  "or",
+                                          "to":  "and",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Boolean Literals (_boolean_)",
+                                          "from":  "true",
+                                          "to":  "false",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Boolean Literals (_boolean_)",
+                                          "from":  "false",
+                                          "to":  "true",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Boolean Literals (_boolean_)",
+                                          "from":  "!person.IsAdult()",
+                                          "to":  "person.IsAdult()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Boolean Literals (_boolean_)",
+                                          "from":  "if(person.IsAdult())",
+                                          "to":  "if(!person.IsAdult())",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Boolean Literals (_boolean_)",
+                                          "from":  "while(person.IsAdult())",
+                                          "to":  "while(!person.IsAdult())",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Assignment Statements (_assignment_)",
+                                          "from":  "+=",
+                                          "to":  "-=",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Assignment Statements (_assignment_)",
+                                          "from":  "-=",
+                                          "to":  "+=",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Assignment Statements (_assignment_)",
+                                          "from":  "*=",
+                                          "to":  "/=",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Assignment Statements (_assignment_)",
+                                          "from":  "/=",
+                                          "to":  "*=",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Assignment Statements (_assignment_)",
+                                          "from":  "%=",
+                                          "to":  "*=",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Assignment Statements (_assignment_)",
+                                          "from":  "\u003c\u003c=",
+                                          "to":  "\u003e\u003e=",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Assignment Statements (_assignment_)",
+                                          "from":  "\u003e\u003e=",
+                                          "to":  "\u003c\u003c=",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Assignment Statements (_assignment_)",
+                                          "from":  "\u0026=",
+                                          "to":  "|=",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Assignment Statements (_assignment_)",
+                                          "from":  "\u0026=",
+                                          "to":  "^=",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Assignment Statements (_assignment_)",
+                                          "from":  "|=",
+                                          "to":  "\u0026=",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Assignment Statements (_assignment_)",
+                                          "from":  "|=",
+                                          "to":  "^=",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Assignment Statements (_assignment_)",
+                                          "from":  "^=",
+                                          "to":  "|=",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Assignment Statements (_assignment_)",
+                                          "from":  "^=",
+                                          "to":  "\u0026=",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Assignment Statements (_assignment_)",
+                                          "from":  "??=",
+                                          "to":  "=",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Initialization (_initializer_)",
+                                          "from":  "new int[] { 1, 2 };",
+                                          "to":  "new int[] { };",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Initialization (_initializer_)",
+                                          "from":  "int[] numbers = { 1, 2 };",
+                                          "to":  "int[] numbers = { };",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Initialization (_initializer_)",
+                                          "from":  "new List\u003cint\u003e { 1, 2 };",
+                                          "to":  "new List\u003cint\u003e { };",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Initialization (_initializer_)",
+                                          "from":  "new Collection\u003cint\u003e { 1, 2 };",
+                                          "to":  "new Collection\u003cint\u003e { };",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Initialization (_initializer_)",
+                                          "from":  "new Dictionary\u003cint, int\u003e { { 1, 1 } };",
+                                          "to":  "new Dictionary\u003cint, int\u003e { };",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Initialization (_initializer_)",
+                                          "from":  "new SomeClass { Foo = \"Bar\" };",
+                                          "to":  "new SomeClass { };",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Removal mutators (_statement_, _block_)",
+                                          "from":  "void Function() { Age++; }",
+                                          "to":  "void Function() {} (block emptied)",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Removal mutators (_statement_, _block_)",
+                                          "from":  "int Function() { Age++; return Age; }",
+                                          "to":  "void Function() { return default; } (block emptied)",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Removal mutators (_statement_, _block_)",
+                                          "from":  "return;",
+                                          "to":  "removed",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Removal mutators (_statement_, _block_)",
+                                          "from":  "return value;",
+                                          "to":  "removed",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Removal mutators (_statement_, _block_)",
+                                          "from":  "break;",
+                                          "to":  "removed",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Removal mutators (_statement_, _block_)",
+                                          "from":  "continue;",
+                                          "to":  "removed",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Removal mutators (_statement_, _block_)",
+                                          "from":  "goto;",
+                                          "to":  "removed",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Removal mutators (_statement_, _block_)",
+                                          "from":  "throw;",
+                                          "to":  "removed",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Removal mutators (_statement_, _block_)",
+                                          "from":  "throw exception;",
+                                          "to":  "removed",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Removal mutators (_statement_, _block_)",
+                                          "from":  "yield return value;",
+                                          "to":  "removed",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Removal mutators (_statement_, _block_)",
+                                          "from":  "yield break;",
+                                          "to":  "removed",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Removal mutators (_statement_, _block_)",
+                                          "from":  "MyMethodCall();",
+                                          "to":  "removed",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Unary Operators (_unary_)",
+                                          "from":  "-variable",
+                                          "to":  "+variable",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Unary Operators (_unary_)",
+                                          "from":  "+variable",
+                                          "to":  "-variable",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Unary Operators (_unary_)",
+                                          "from":  "~variable",
+                                          "to":  "variable",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Update Operators (_update_)",
+                                          "from":  "variable++",
+                                          "to":  "variable--",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Update Operators (_update_)",
+                                          "from":  "variable--",
+                                          "to":  "variable++",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Update Operators (_update_)",
+                                          "from":  "++variable",
+                                          "to":  "--variable",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Update Operators (_update_)",
+                                          "from":  "--variable",
+                                          "to":  "++variable",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Checked Statements (_checked_)",
+                                          "from":  "checked(2 + 4)",
+                                          "to":  "2 + 4",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Linq Methods (_linq_)",
+                                          "from":  "All()",
+                                          "to":  "Any()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Linq Methods (_linq_)",
+                                          "from":  "Any()",
+                                          "to":  "All()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Linq Methods (_linq_)",
+                                          "from":  "AsEnumerable()",
+                                          "to":  "Reverse()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Linq Methods (_linq_)",
+                                          "from":  "Average()",
+                                          "to":  "Min()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Linq Methods (_linq_)",
+                                          "from":  "Concat()",
+                                          "to":  "Except()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Linq Methods (_linq_)",
+                                          "from":  "Count()",
+                                          "to":  "Sum()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Linq Methods (_linq_)",
+                                          "from":  "Except()",
+                                          "to":  "Concat()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Linq Methods (_linq_)",
+                                          "from":  "First()",
+                                          "to":  "FirstOrDefault()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Linq Methods (_linq_)",
+                                          "from":  "FirstOrDefault()",
+                                          "to":  "First()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Linq Methods (_linq_)",
+                                          "from":  "Intersect()",
+                                          "to":  "Union()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Linq Methods (_linq_)",
+                                          "from":  "IntersectBy()",
+                                          "to":  "UnionBy()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Linq Methods (_linq_)",
+                                          "from":  "Last()",
+                                          "to":  "First()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Linq Methods (_linq_)",
+                                          "from":  "Max()",
+                                          "to":  "Min()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Linq Methods (_linq_)",
+                                          "from":  "MaxBy()",
+                                          "to":  "MinBy()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Linq Methods (_linq_)",
+                                          "from":  "Min()",
+                                          "to":  "Max()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Linq Methods (_linq_)",
+                                          "from":  "MinBy()",
+                                          "to":  "MaxBy()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Linq Methods (_linq_)",
+                                          "from":  "Order()",
+                                          "to":  "OrderDescending()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Linq Methods (_linq_)",
+                                          "from":  "OrderBy()",
+                                          "to":  "OrderByDescending()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Linq Methods (_linq_)",
+                                          "from":  "OrderByDescending()",
+                                          "to":  "OrderBy()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Linq Methods (_linq_)",
+                                          "from":  "OrderDescending()",
+                                          "to":  "Order()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Linq Methods (_linq_)",
+                                          "from":  "Reverse()",
+                                          "to":  "AsEnumerable()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Linq Methods (_linq_)",
+                                          "from":  "Single()",
+                                          "to":  "SingleOrDefault()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Linq Methods (_linq_)",
+                                          "from":  "SingleOrDefault()",
+                                          "to":  "Single()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Linq Methods (_linq_)",
+                                          "from":  "Skip()",
+                                          "to":  "Take()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Linq Methods (_linq_)",
+                                          "from":  "SkipLast()",
+                                          "to":  "TakeLast()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Linq Methods (_linq_)",
+                                          "from":  "SkipWhile()",
+                                          "to":  "TakeWhile()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Linq Methods (_linq_)",
+                                          "from":  "Sum()",
+                                          "to":  "Max()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Linq Methods (_linq_)",
+                                          "from":  "Take()",
+                                          "to":  "Skip()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Linq Methods (_linq_)",
+                                          "from":  "TakeLast()",
+                                          "to":  "SkipLast()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Linq Methods (_linq_)",
+                                          "from":  "TakeWhile()",
+                                          "to":  "SkipWhile()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Linq Methods (_linq_)",
+                                          "from":  "ThenBy()",
+                                          "to":  "ThenByDescending()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Linq Methods (_linq_)",
+                                          "from":  "ThenByDescending()",
+                                          "to":  "ThenBy()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Linq Methods (_linq_)",
+                                          "from":  "Union()",
+                                          "to":  "Intersect()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Linq Methods (_linq_)",
+                                          "from":  "UnionBy()",
+                                          "to":  "IntersectBy()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / String Literals (_string_)",
+                                          "from":  "\"foo\"",
+                                          "to":  "\"\"",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / String Literals (_string_)",
+                                          "from":  "\"\"",
+                                          "to":  "\"Stryker was here!\"",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / String Literals (_string_)",
+                                          "from":  "$\"foo {bar}\"",
+                                          "to":  "$\"\"",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / String Literals (_string_)",
+                                          "from":  "@\"foo\"",
+                                          "to":  "@\"\"",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / String Literals (_string_)",
+                                          "from":  "string.Empty",
+                                          "to":  "\"Stryker was here!\"",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / String Literals (_string_)",
+                                          "from":  "string.IsNullOrEmpty(x)",
+                                          "to":  "(x != null)",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / String Literals (_string_)",
+                                          "from":  "string.IsNullOrEmpty(x)",
+                                          "to":  "(x != \"\")",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / String Literals (_string_)",
+                                          "from":  "string.IsNullOrWhiteSpace(x)",
+                                          "to":  "(x != null)",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / String Literals (_string_)",
+                                          "from":  "string.IsNullOrWhiteSpace(x)",
+                                          "to":  "(x != \"\")",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / String Literals (_string_)",
+                                          "from":  "string.IsNullOrWhiteSpace(x)",
+                                          "to":  "(x.Trim() != \"\")",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / String Methods (_stringmethod_)",
+                                          "from":  "ElementAt()",
+                                          "to":  "\u0027\\0\u0027",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / String Methods (_stringmethod_)",
+                                          "from":  "ElementAtOrDefault()",
+                                          "to":  "\u0027\\0\u0027",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / String Methods (_stringmethod_)",
+                                          "from":  "EndsWith()",
+                                          "to":  "StartsWith()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / String Methods (_stringmethod_)",
+                                          "from":  "IndexOf()",
+                                          "to":  "LastIndexOf()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / String Methods (_stringmethod_)",
+                                          "from":  "LastIndexOf()",
+                                          "to":  "IndexOf()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / String Methods (_stringmethod_)",
+                                          "from":  "PadLeft()",
+                                          "to":  "PadRight()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / String Methods (_stringmethod_)",
+                                          "from":  "PadRight()",
+                                          "to":  "PadLeft()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / String Methods (_stringmethod_)",
+                                          "from":  "StartsWith()",
+                                          "to":  "EndsWith()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / String Methods (_stringmethod_)",
+                                          "from":  "Substring()",
+                                          "to":  "\"\"",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / String Methods (_stringmethod_)",
+                                          "from":  "ToLower()",
+                                          "to":  "ToUpper()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / String Methods (_stringmethod_)",
+                                          "from":  "ToLowerInvariant()",
+                                          "to":  "ToUpperInvariant()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / String Methods (_stringmethod_)",
+                                          "from":  "ToUpper()",
+                                          "to":  "ToLower()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / String Methods (_stringmethod_)",
+                                          "from":  "ToUpperInvariant()",
+                                          "to":  "ToLowerInvariant()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / String Methods (_stringmethod_)",
+                                          "from":  "Trim()",
+                                          "to":  "\"\"",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / String Methods (_stringmethod_)",
+                                          "from":  "TrimEnd()",
+                                          "to":  "TrimStart()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / String Methods (_stringmethod_)",
+                                          "from":  "TrimStart()",
+                                          "to":  "TrimEnd()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Bitwise Operators (_bitwise_)",
+                                          "from":  "\u003c\u003c",
+                                          "to":  "\u003e\u003e",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Bitwise Operators (_bitwise_)",
+                                          "from":  "\u003e\u003e",
+                                          "to":  "\u003c\u003c",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Bitwise Operators (_bitwise_)",
+                                          "from":  "\u0026",
+                                          "to":  "|",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Bitwise Operators (_bitwise_)",
+                                          "from":  "|",
+                                          "to":  "\u0026",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Bitwise Operators (_bitwise_)",
+                                          "from":  "a^b",
+                                          "to":  "~(a^b)",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Acos()",
+                                          "to":  "Acosh()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Acos()",
+                                          "to":  "Asin()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Acos()",
+                                          "to":  "Atan()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Acosh()",
+                                          "to":  "Acos()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Acosh()",
+                                          "to":  "Asinh()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Acosh()",
+                                          "to":  "Atanh()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Asin()",
+                                          "to":  "Asinh()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Asin()",
+                                          "to":  "Acos()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Asin()",
+                                          "to":  "Atan()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Asinh()",
+                                          "to":  "Asin()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Asinh()",
+                                          "to":  "Acosh()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Asinh()",
+                                          "to":  "Atanh()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Atan()",
+                                          "to":  "Atanh()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Atan()",
+                                          "to":  "Acos()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Atan()",
+                                          "to":  "Asin()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Atanh()",
+                                          "to":  "Atan()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Atanh()",
+                                          "to":  "Acosh()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Atanh()",
+                                          "to":  "Asinh()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "BitDecrement()",
+                                          "to":  "BitIncrement()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "BitIncrement()",
+                                          "to":  "BitDecrement()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Ceiling()",
+                                          "to":  "Floor()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Cos()",
+                                          "to":  "Cosh()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Cos()",
+                                          "to":  "Sin()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Cos()",
+                                          "to":  "Tan()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Cosh()",
+                                          "to":  "Cos()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Cosh()",
+                                          "to":  "Sinh()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Cosh()",
+                                          "to":  "Tanh()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Exp()",
+                                          "to":  "Log()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Floor()",
+                                          "to":  "Ceiling()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Log()",
+                                          "to":  "Exp()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Log()",
+                                          "to":  "Pow()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "MaxMagnitude()",
+                                          "to":  "MinMagnitude()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "MinMagnitude()",
+                                          "to":  "MaxMagnitude()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Pow()",
+                                          "to":  "Log()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "ReciprocalEstimate()",
+                                          "to":  "ReciprocalSqrtEstimate()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "ReciprocalSqrtEstimate()",
+                                          "to":  "ReciprocalEstimate()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "ReciprocalSqrtEstimate()",
+                                          "to":  "Sqrt()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Sin()",
+                                          "to":  "Sinh()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Sin()",
+                                          "to":  "Cos()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Sin()",
+                                          "to":  "Tan()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Sinh()",
+                                          "to":  "Sin()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Sinh()",
+                                          "to":  "Cosh()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Sinh()",
+                                          "to":  "Tanh()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Tan()",
+                                          "to":  "Tanh()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Tan()",
+                                          "to":  "Cos()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Tan()",
+                                          "to":  "Sin()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Tanh()",
+                                          "to":  "Tan()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Tanh()",
+                                          "to":  "Cosh()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Math Methods (_math_)",
+                                          "from":  "Tanh()",
+                                          "to":  "Sinh()",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Null-coalescing Operators (_nullcoalescing_)",
+                                          "from":  "a ?? b",
+                                          "to":  "b ?? a",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Null-coalescing Operators (_nullcoalescing_)",
+                                          "from":  "a ?? b",
+                                          "to":  "a",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Null-coalescing Operators (_nullcoalescing_)",
+                                          "from":  "a ?? b",
+                                          "to":  "b",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Conditional Operators (_conditional_)",
+                                          "from":  "x ? a : b",
+                                          "to":  "true ? a : b",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Conditional Operators (_conditional_)",
+                                          "from":  "x ? a : b",
+                                          "to":  "false ? a : b",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Collection Expressions (_collectionexpression_)",
+                                          "from":  "[]",
+                                          "to":  "[default]",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Mutation / Collection Expressions (_collectionexpression_)",
+                                          "from":  "[1, 2, 3]",
+                                          "to":  "[]",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Common tokens",
+                                          "from":  "[abc]",
+                                          "to":  "[^abc]",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Common tokens",
+                                          "from":  "[^abc]",
+                                          "to":  "[abc]",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Common tokens",
+                                          "from":  "\\d",
+                                          "to":  "\\D",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Common tokens",
+                                          "from":  "\\D",
+                                          "to":  "\\d",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Common tokens",
+                                          "from":  "\\w",
+                                          "to":  "\\W",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Common tokens",
+                                          "from":  "\\W",
+                                          "to":  "\\w",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Common tokens",
+                                          "from":  "\\s",
+                                          "to":  "\\S",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Common tokens",
+                                          "from":  "\\S",
+                                          "to":  "\\s",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Anchors",
+                                          "from":  "^abc",
+                                          "to":  "abc",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Anchors",
+                                          "from":  "abc$",
+                                          "to":  "abc",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Anchors",
+                                          "from":  "\\Aabc",
+                                          "to":  "abc",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Anchors",
+                                          "from":  "abc\\Z",
+                                          "to":  "abc",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Anchors",
+                                          "from":  "abc\\z",
+                                          "to":  "abc",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Anchors",
+                                          "from":  "abc\\b",
+                                          "to":  "abc",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Anchors",
+                                          "from":  "abc\\B",
+                                          "to":  "abc",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Anchors",
+                                          "from":  "\\Gabc",
+                                          "to":  "abc",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Anchors",
+                                          "from":  "abc*",
+                                          "to":  "abc",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Anchors",
+                                          "from":  "abc?",
+                                          "to":  "abc",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Anchors",
+                                          "from":  "abc+",
+                                          "to":  "abc",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Quantifiers",
+                                          "from":  "abc{5}",
+                                          "to":  "abc",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Quantifiers",
+                                          "from":  "abc{5,}",
+                                          "to":  "abc",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Quantifiers",
+                                          "from":  "abc{5,8}",
+                                          "to":  "abc",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Quantifiers",
+                                          "from":  "abc{5,8}",
+                                          "to":  "abc{4,8}",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Quantifiers",
+                                          "from":  "abc{5,8}",
+                                          "to":  "abc{6,8}",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Quantifiers",
+                                          "from":  "abc{5,8}",
+                                          "to":  "abc{5,7}",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Quantifiers",
+                                          "from":  "abc{5,8}",
+                                          "to":  "abc{5,9}",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Quantifiers",
+                                          "from":  "abc{5,}",
+                                          "to":  "abc{4,}",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Quantifiers",
+                                          "from":  "abc{5,}",
+                                          "to":  "abc{6,}",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Group constructs",
+                                          "from":  "(?=abc)",
+                                          "to":  "(?!abc)",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Group constructs",
+                                          "from":  "(?!abc)",
+                                          "to":  "(?=abc)",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Group constructs",
+                                          "from":  "(?\u003c=abc)",
+                                          "to":  "(?\u003c!abc)",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Group constructs",
+                                          "from":  "(?\u003c!abc)",
+                                          "to":  "(?\u003c=abc)",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Character class mutators / CharClassChildRemoval",
+                                          "from":  "[abc]",
+                                          "to":  "[bc]",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Character class mutators / CharClassChildRemoval",
+                                          "from":  "[abc]",
+                                          "to":  "[ac]",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Character class mutators / CharClassChildRemoval",
+                                          "from":  "[abc]",
+                                          "to":  "[ab]",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Character class mutators / CharClassAnyChar",
+                                          "from":  "[abc]",
+                                          "to":  "[\\w\\W]",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Character class mutators / CharClassRangeModification",
+                                          "from":  "[b-y]",
+                                          "to":  "[a-y]",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Character class mutators / CharClassRangeModification",
+                                          "from":  "[b-y]",
+                                          "to":  "[c-y]",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Character class mutators / CharClassRangeModification",
+                                          "from":  "[b-y]",
+                                          "to":  "[b-z]",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Character class mutators / CharClassRangeModification",
+                                          "from":  "[b-y]",
+                                          "to":  "[b-x]",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Predefined character class mutators / PredefCharClassNullification",
+                                          "from":  "\\d",
+                                          "to":  "d",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Predefined character class mutators / PredefCharClassNullification",
+                                          "from":  "\\D",
+                                          "to":  "D",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Predefined character class mutators / PredefCharClassNullification",
+                                          "from":  "\\s",
+                                          "to":  "s",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Predefined character class mutators / PredefCharClassNullification",
+                                          "from":  "\\S",
+                                          "to":  "S",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Predefined character class mutators / PredefCharClassNullification",
+                                          "from":  "\\w",
+                                          "to":  "w",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Predefined character class mutators / PredefCharClassNullification",
+                                          "from":  "\\W",
+                                          "to":  "W",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Predefined character class mutators / PredefCharClassAnyChar",
+                                          "from":  "\\d",
+                                          "to":  "[\\d\\D]",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Predefined character class mutators / PredefCharClassAnyChar",
+                                          "from":  "\\D",
+                                          "to":  "[\\D\\d]",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Predefined character class mutators / PredefCharClassAnyChar",
+                                          "from":  "\\s",
+                                          "to":  "[\\s\\S]",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Predefined character class mutators / PredefCharClassAnyChar",
+                                          "from":  "\\S",
+                                          "to":  "[\\S\\s]",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Predefined character class mutators / PredefCharClassAnyChar",
+                                          "from":  "\\w",
+                                          "to":  "[\\w\\W]",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Predefined character class mutators / PredefCharClassAnyChar",
+                                          "from":  "\\W",
+                                          "to":  "[\\W\\w]",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Predefined character class mutators / UnicodeCharClassNegation",
+                                          "from":  "\\p{Alpha}",
+                                          "to":  "\\P{Alpha}",
+                                          "status":  "unsupported",
+                                          "reason":  "The C# string literal compiles, but System.Text.RegularExpressions.Regex rejects the Unicode category name Alpha when constructed; no valid baseline runtime behavior can be preserved under the target runtime."
+                                      },
+                                      {
+                                          "category":  "Regex / Predefined character class mutators / UnicodeCharClassNegation",
+                                          "from":  "\\P{Alpha}",
+                                          "to":  "\\p{Alpha}",
+                                          "status":  "unsupported",
+                                          "reason":  "The C# string literal compiles, but System.Text.RegularExpressions.Regex rejects the Unicode category name Alpha when constructed; no valid baseline runtime behavior can be preserved under the target runtime."
+                                      },
+                                      {
+                                          "category":  "Regex / Quantifier mutators / QuantifierShortModification",
+                                          "from":  "abc?",
+                                          "to":  "abc{1,1}",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Quantifier mutators / QuantifierShortModification",
+                                          "from":  "abc?",
+                                          "to":  "abc{0,0}",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Quantifier mutators / QuantifierShortModification",
+                                          "from":  "abc?",
+                                          "to":  "abc{0,2}",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Quantifier mutators / QuantifierShortModification",
+                                          "from":  "abc*",
+                                          "to":  "abc{1,}",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Quantifier mutators / QuantifierShortModification",
+                                          "from":  "abc+",
+                                          "to":  "abc{0,}",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Quantifier mutators / QuantifierShortModification",
+                                          "from":  "abc+",
+                                          "to":  "abc{2,}",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Quantifier mutators / QuantifierReluctantAddition",
+                                          "from":  "abc?",
+                                          "to":  "abc??",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Quantifier mutators / QuantifierReluctantAddition",
+                                          "from":  "abc*",
+                                          "to":  "abc*?",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Quantifier mutators / QuantifierReluctantAddition",
+                                          "from":  "abc+",
+                                          "to":  "abc+?",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Quantifier mutators / QuantifierReluctantAddition",
+                                          "from":  "abc{9}",
+                                          "to":  "abc{9}?",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Quantifier mutators / QuantifierReluctantAddition",
+                                          "from":  "abc{9,}",
+                                          "to":  "abc{9,}?",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Quantifier mutators / QuantifierReluctantAddition",
+                                          "from":  "abc{9,13}",
+                                          "to":  "abc{9,13}?",
+                                          "status":  "supported"
+                                      },
+                                      {
+                                          "category":  "Regex / Group-related construct mutators / GroupToNCGroup",
+                                          "from":  "(abc)",
+                                          "to":  "(?:abc)",
+                                          "status":  "supported"
+                                      }
+                                  ]
+}

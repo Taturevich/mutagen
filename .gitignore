@@ -4,5 +4,6 @@ mutation-results/
 mutation-results-sdk/
 temp-test*/
 .mutation-work/
+.mutagen-cache/
 /.tools/
 /artifacts/benchmark/

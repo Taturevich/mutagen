@@ -1,9 +1,15 @@
 <Solution>
   <Project Path="src/MutationFramework.Cli/MutationFramework.Cli.csproj" />
+  <Project Path="src/MutationFramework.CoverageCollector/MutationFramework.CoverageCollector.csproj" />
+  <Project Path="src/MutationFramework.Mutators/MutationFramework.Mutators.csproj" />
   <Project Path="samples/SampleApplication/SampleApplication.csproj" />
   <Project Path="samples/SampleApplication.Tests/SampleApplication.Tests.csproj" />
   <Project Path="samples/SdkSample/SdkSample.csproj" />
   <Project Path="tst/MutationFramework.EngineTests/MutationFramework.EngineTests.csproj" />
   <Project Path="benchmarks/ScaleSample/ScaleSample/ScaleSample.csproj" />
   <Project Path="benchmarks/ScaleSample/ScaleSample.Tests/ScaleSample.Tests.csproj" />
+  <Project Path="benchmarks/LargeIntegrationSample/LargeIntegrationSample/LargeIntegrationSample.csproj" />
+  <Project Path="benchmarks/LargeIntegrationSample/LargeIntegrationSample.Tests/LargeIntegrationSample.Tests.csproj" />
+  <Project Path="benchmarks/IsolationSample/IsolationSample.csproj" />
+  <Project Path="benchmarks/IsolationSample.Tests/IsolationSample.Tests.csproj" />
 </Solution>
