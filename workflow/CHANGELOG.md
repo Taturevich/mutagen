@@ -303,3 +303,8 @@
 # 2026-11-16 - Stop PerMutant runs after the first attributable kill
 - PerMutant execution now requests VSTest cancellation when a test-body failure can be attributed to the selected test. Completed test results are retained, remaining cases are reported as bailed, and mutation execution counters count only cases that started. Unattributed failures, timeouts, and infrastructure errors retain their existing classifications.
 - Added an E2E with two ordered covered cases and a marker in the later case; the first case kills every relational mutant, the later case is not run, and the execution count is one case per mutant. Focused E2E passed. The repeated 2,000-mutant PerMutant benchmark is next to verify the workload-scale effect and exact pinned-Stryker differential.
+
+# 2026-11-17 - Preserve custom environment inputs in result-cache keys
+- Narrowed environment-fingerprint exclusion to the known per-invocation `CODEX_TOOL_CALL_ID`; other `CODEX_*` values are now hashed because tests may use them as configuration. Added a regression proving invocation metadata remains excluded while custom configuration changes the fingerprint. All three fingerprint tests passed.
+- The 2,000-mutant PerMutant integration benchmark did not complete after more than 30 minutes and was stopped without producing a measurement. This policy remains unmeasured at large scale; the existing matched PerBatch and PerResourceGroup reports remain the available large-workload results.
+- Scoped SQLite lock discovery to its two intended test cases after the new bailout fixture expanded the shared test assembly. The focused lock E2E and complete solution suite passed (309 tests total); the correction was pushed as `1d49f57`.

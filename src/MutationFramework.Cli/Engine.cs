@@ -2446,8 +2446,10 @@ internal static class Engine
     {
       "PATH", "TEMP", "TMP", "TMPDIR", "NUMBER_OF_PROCESSORS", "SESSIONNAME", "ChocolateyLastPathUpdate"
     };
+    // Exclude only the known per-invocation identifier; other CODEX_* variables may configure tests.
+    volatileNames.Add("CODEX_TOOL_CALL_ID");
     var values = Environment.GetEnvironmentVariables().Cast<System.Collections.DictionaryEntry>()
-        .Where(entry => !volatileNames.Contains((string)entry.Key) && !((string)entry.Key).StartsWith("CODEX_", StringComparison.OrdinalIgnoreCase))
+        .Where(entry => !volatileNames.Contains((string)entry.Key))
         .Select(entry => $"{entry.Key}={Hash(Convert.ToString(entry.Value, System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty)}")
         .Order(StringComparer.Ordinal).ToList();
     var dotnetRoots = (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)

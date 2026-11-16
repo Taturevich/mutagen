@@ -500,6 +500,25 @@ public sealed class MutationEngineIntegrationTests
   }
 
   [Test]
+  public void CacheEnvironmentFingerprintIncludesOtherCodexEnvironmentConfiguration()
+  {
+    const string name = "CODEX_MUTATION_CACHE_TEST_CONFIGURATION";
+    var original = Environment.GetEnvironmentVariable(name);
+    try
+    {
+      Environment.SetEnvironmentVariable(name, "configuration-one");
+      var first = Engine.EnvironmentFingerprint();
+      Environment.SetEnvironmentVariable(name, "configuration-two");
+
+      Assert.That(Engine.EnvironmentFingerprint(), Is.Not.EqualTo(first));
+    }
+    finally
+    {
+      Environment.SetEnvironmentVariable(name, original);
+    }
+  }
+
+  [Test]
   public void CacheEnvironmentFingerprintPreservesDotnetPathSelectionOrder()
   {
     var root = Path.Combine(Path.GetTempPath(), "MutagenSdkPathFingerprint", Guid.NewGuid().ToString("N"));
