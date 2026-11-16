@@ -4646,6 +4646,71 @@ public sealed class MutationEngineIntegrationTests
   }
 
   [Test]
+  public async Task PerMutantExecutionStopsAfterTheFirstAttributableFailure()
+  {
+    var project = Path.Combine(Root, "benchmarks", "IsolationSample", "IsolationSample.csproj");
+    var tests = Path.Combine(Root, "benchmarks", "IsolationSample.Tests", "IsolationSample.Tests.csproj");
+    var output = NewOutputDirectory();
+    var marker = Path.Combine(Path.GetTempPath(), "MutagenPerMutantBail", Guid.NewGuid().ToString("N"), "later-test-ran.txt");
+    var previousMarker = Environment.GetEnvironmentVariable("MUTAGEN_PER_MUTANT_BAIL_MARKER");
+    try
+    {
+      var discoveryOptions = new MutationOptions
+      {
+        ProjectPath = project,
+        TestProjects = [tests],
+        TestFilter = "MutantBailoutTests",
+        Mutators = new HashSet<string>(["binary-operators"], StringComparer.Ordinal),
+        TestHostIsolationPolicy = TestHostIsolationPolicy.PerMutant,
+        ExecutionMode = MutationExecutionMode.Isolated,
+        MaxWorkers = 1,
+        TimeoutSeconds = 120
+      };
+      var discovery = await MutationEngine.DiscoverAsync(discoveryOptions);
+      Assert.That(discovery.Tests, Has.Count.EqualTo(2));
+      var locks = discovery.Tests.ToDictionary(test => test.Id,
+          _ => (IReadOnlyList<string>)["mutant-bailout"], StringComparer.Ordinal);
+      Directory.CreateDirectory(Path.GetDirectoryName(marker)!);
+      Environment.SetEnvironmentVariable("MUTAGEN_PER_MUTANT_BAIL_MARKER", marker);
+
+      var result = await MutationEngine.RunAsync(new MutationOptions
+      {
+        ProjectPath = project,
+        TestProjects = [tests],
+        TestFilter = "MutantBailoutTests",
+        Mutators = discoveryOptions.Mutators,
+        TestHostIsolationPolicy = TestHostIsolationPolicy.PerMutant,
+        ExecutionMode = MutationExecutionMode.Isolated,
+        ResourceLocksByTestId = locks,
+        MaxWorkers = 1,
+        TimeoutSeconds = 120,
+        OutputDirectory = output
+      });
+
+      Assert.That(result.OverallStatus, Is.EqualTo("Completed"), string.Join(Environment.NewLine, result.Diagnostics));
+      Assert.That(result.Mutants, Is.Not.Empty);
+      Assert.That(result.Mutants.All(mutant => mutant.Status == MutationStatus.Killed), Is.True);
+      Assert.That(result.Mutants.All(mutant => mutant.KillingTests.Any(name => name.Contains("BoundaryComparisonKillsEveryRelationalMutant", StringComparison.Ordinal))), Is.True);
+      Assert.That(result.Counters.MutationTestExecutions, Is.EqualTo(result.Mutants.Count));
+      Assert.That(File.Exists(marker), Is.False, "The later covered case must not run after the first test kills each mutant.");
+    }
+    finally
+    {
+      Environment.SetEnvironmentVariable("MUTAGEN_PER_MUTANT_BAIL_MARKER", previousMarker);
+      if (Directory.Exists(output))
+      {
+        Directory.Delete(output, true);
+      }
+
+      var markerDirectory = Path.GetDirectoryName(marker)!;
+      if (Directory.Exists(markerDirectory))
+      {
+        Directory.Delete(markerDirectory, true);
+      }
+    }
+  }
+
+  [Test]
   public async Task SqliteIntegrationFixtureUsesDiscoveredShardLocksEndToEnd()
   {
     var root = Path.Combine(Path.GetTempPath(), "MutagenSqliteLockE2E", Guid.NewGuid().ToString("N"));

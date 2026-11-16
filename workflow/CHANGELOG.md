@@ -300,3 +300,6 @@
 # 2026-11-16 - Make host-start verification portable across VSTest launch behavior
 - The PerMutant E2E now verifies that the shared per-test coverage collector is active and bounds the allowed host starts to two baseline/setup hosts plus one per covered mutant. This guards the intended reuse without assuming VSTest always launches exactly one baseline host.
 
+# 2026-11-16 - Stop PerMutant runs after the first attributable kill
+- PerMutant execution now requests VSTest cancellation when a test-body failure can be attributed to the selected test. Completed test results are retained, remaining cases are reported as bailed, and mutation execution counters count only cases that started. Unattributed failures, timeouts, and infrastructure errors retain their existing classifications.
+- Added an E2E with two ordered covered cases and a marker in the later case; the first case kills every relational mutant, the later case is not run, and the execution count is one case per mutant. Focused E2E passed. The repeated 2,000-mutant PerMutant benchmark is next to verify the workload-scale effect and exact pinned-Stryker differential.

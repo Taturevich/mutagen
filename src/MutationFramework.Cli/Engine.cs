@@ -924,16 +924,20 @@ internal static class Engine
                 if (opt.TestHostIsolationPolicy == TestHostIsolationPolicy.PerMutant &&
                     relevant.All(testCase => !perTestIsolationIds.Contains(testCase.Id)))
                 {
-                  Interlocked.Add(ref metrics.MutationTests, relevant.Length);
                   var resourceLocks = relevant.SelectMany(testCase => opt.ResourceLocksByTestId.GetValueOrDefault(testCase.Id, []))
                       .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
                   var runs = await resourceLockManager.ExecuteAsync(resourceLocks,
                       () => ExecuteTestsInSharedMutationHost(relevant, opt, c.MutantRuntimeId, workerSession, metrics, ct,
-                          serializeTests: resourceLocks.Length != 0), ct);
+                          serializeTests: resourceLocks.Length != 0, stopAfterAttributableFailure: true), ct);
+                  Interlocked.Add(ref metrics.MutationTests,
+                      runs.Count(run => run.Error?.StartsWith("BAILED:", StringComparison.Ordinal) != true));
                   duration = runs.Sum(run => run.DurationMs);
-                  var uncertain = runs.FirstOrDefault(run => run.Skipped || run.Error?.StartsWith("TEST_FAILURE_UNATTRIBUTED:", StringComparison.Ordinal) == true);
                   var infrastructureFailure = runs.FirstOrDefault(run => run.Error?.StartsWith("INFRASTRUCTURE:", StringComparison.Ordinal) == true);
                   var timeout = runs.FirstOrDefault(run => run.Error?.StartsWith("TIMEOUT:", StringComparison.Ordinal) == true);
+                  var killingRuns = runs.Where(run => run.Error?.StartsWith("TEST_FAILURE:", StringComparison.Ordinal) == true).ToArray();
+                  var uncertain = runs.FirstOrDefault(run =>
+                      run.Error?.StartsWith("BAILED:", StringComparison.Ordinal) != true &&
+                      (run.Skipped || run.Error?.StartsWith("TEST_FAILURE_UNATTRIBUTED:", StringComparison.Ordinal) == true));
                   if (infrastructureFailure != null)
                   {
                     status = MutationStatus.InfrastructureError; error = infrastructureFailure.Error;
@@ -942,6 +946,12 @@ internal static class Engine
                   {
                     status = MutationStatus.Timeout; error = timeout.Error;
                   }
+                  else if (killingRuns.Length != 0)
+                  {
+                    status = MutationStatus.Killed;
+                    error = killingRuns[0].Error;
+                    kill.AddRange(killingRuns.Select(run => run.Name));
+                  }
                   else if (uncertain != null)
                   {
                     status = MutationStatus.Inconclusive;
@@ -949,13 +959,7 @@ internal static class Engine
                   }
                   else
                   {
-                    var killingRuns = runs.Where(run => run.Error?.StartsWith("TEST_FAILURE:", StringComparison.Ordinal) == true).ToArray();
-                    if (killingRuns.Length != 0)
-                    {
-                      status = MutationStatus.Killed;
-                      error = killingRuns[0].Error;
-                      kill.AddRange(killingRuns.Select(run => run.Name));
-                    }
+                    status = MutationStatus.Survived;
                   }
                 }
                 else
@@ -1374,11 +1378,12 @@ internal static class Engine
 
   private static async Task<IReadOnlyList<TestRun>> ExecuteTestsInSharedMutationHost(TestCaseDescriptor[] tests,
       MutationOptions options, string active, TestPlatformSession platform, RunMetrics metrics, CancellationToken cancellationToken,
-      bool serializeTests = false)
+      bool serializeTests = false, bool stopAfterAttributableFailure = false)
   {
     var totalTimeout = (int)Math.Min(int.MaxValue / 1000L, (long)options.TimeoutSeconds * tests.Length);
     var results = await Task.Run(() => platform.ExecuteMany(tests, null, active, totalTimeout,
-        () => metrics.StartedTestHost(), cancellationToken, serializeTests), CancellationToken.None);
+        () => metrics.StartedTestHost(), cancellationToken, serializeTests,
+        stopAfterAttributableFailure: stopAfterAttributableFailure), CancellationToken.None);
     return tests.Select(test =>
     {
       var result = results[test.Id];

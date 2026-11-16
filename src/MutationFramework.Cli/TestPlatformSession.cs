@@ -59,7 +59,7 @@ internal sealed class TestPlatformSession : IDisposable
 
   public IReadOnlyDictionary<string, PlatformTestResult> ExecuteMany(IReadOnlyList<TestCaseDescriptor> tests, string? probePath,
       string? activeMutationId, int timeoutSeconds, Action hostStarted, CancellationToken cancellationToken, bool serializeTests = false,
-      bool capturePerTestCoverage = false)
+      bool capturePerTestCoverage = false, bool stopAfterAttributableFailure = false)
   {
     if (tests.Count == 0)
     {
@@ -67,7 +67,11 @@ internal sealed class TestPlatformSession : IDisposable
     }
 
     cancellationToken.ThrowIfCancellationRequested();
-    var handler = new RunHandler();
+    var handler = new RunHandler(tests.Count, stopAfterAttributableFailure ? () =>
+    {
+      try { _console.CancelTestRun(); } catch { }
+    }
+    : null);
     using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
     timeout.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
     using var launcher = new ProcessTestHostLauncher(probePath, activeMutationId, hostStarted, capturePerTestCoverage);
@@ -83,6 +87,11 @@ internal sealed class TestPlatformSession : IDisposable
     }
     catch (Exception ex)
     {
+      if (handler.StoppedAfterAttributableFailure && !cancellationToken.IsCancellationRequested && !timeout.IsCancellationRequested)
+      {
+        return PartialResults(tests, handler.Results, capturePerTestCoverage);
+      }
+
       if (timeout.IsCancellationRequested)
       {
         var canceled = cancellationToken.IsCancellationRequested;
@@ -113,6 +122,11 @@ internal sealed class TestPlatformSession : IDisposable
           _ => new PlatformTestResult(false, false, "TIMEOUT: Test execution timed out.", true), StringComparer.Ordinal);
     }
 
+    if (handler.StoppedAfterAttributableFailure)
+    {
+      return PartialResults(tests, handler.Results, capturePerTestCoverage);
+    }
+
     if (!handler.Completed || handler.Aborted || handler.Error != null)
     {
       return tests.ToDictionary(test => test.Id,
@@ -128,6 +142,21 @@ internal sealed class TestPlatformSession : IDisposable
     }
 
     return tests.ToDictionary(test => test.Id, test => ConvertResult(test, results[test.Case.Id], capturePerTestCoverage), StringComparer.Ordinal);
+  }
+
+  private static Dictionary<string, PlatformTestResult> PartialResults(IReadOnlyList<TestCaseDescriptor> tests,
+      IEnumerable<TestResult> observedResults, bool capturePerTestCoverage)
+  {
+    var expectedIds = tests.Select(test => test.Case.Id).ToHashSet();
+    var results = observedResults.Where(result => expectedIds.Contains(result.TestCase.Id))
+        .GroupBy(result => result.TestCase.Id).ToDictionary(group => group.Key, group => group.First());
+    return tests.ToDictionary(test => test.Id,
+        test => results.TryGetValue(test.Case.Id, out var result)
+            ? result.Outcome == TestOutcome.None
+                ? new PlatformTestResult(false, true, "BAILED: Test execution was canceled after an attributable failure killed this mutant.", false)
+                : ConvertResult(test, result, capturePerTestCoverage)
+            : new PlatformTestResult(false, true, "BAILED: Not executed after an attributable test failure killed this mutant.", false),
+        StringComparer.Ordinal);
   }
 
   private static PlatformTestResult ConvertResult(TestCaseDescriptor test, TestResult result, bool capturePerTestCoverage)
@@ -278,8 +307,19 @@ internal sealed class TestPlatformSession : IDisposable
     public bool Completed { get; private set; }
     public bool Aborted { get; private set; }
     public string? Error { get; private set; }
+    public bool StoppedAfterAttributableFailure { get; private set; }
 
     private readonly HashSet<Guid> _resultIds = [];
+    private readonly int _expectedResultCount;
+    private readonly Action? _stopAfterFailure;
+    private int _stopRequested;
+
+    public RunHandler(int expectedResultCount, Action? stopAfterFailure)
+    {
+      _expectedResultCount = expectedResultCount;
+      _stopAfterFailure = stopAfterFailure;
+    }
+
     private void AddResults(IEnumerable<TestResult>? results)
     {
       if (results == null)
@@ -292,6 +332,14 @@ internal sealed class TestPlatformSession : IDisposable
         if (_resultIds.Add(result.TestCase.Id))
         {
           Results.Add(result);
+          if (Results.Count < _expectedResultCount &&
+              result.Outcome == TestOutcome.Failed &&
+              TestPlatformSession.HasTestBodyFailureEvidence(result.TestCase.FullyQualifiedName, result.ErrorStackTrace) &&
+              _stopAfterFailure is not null && Interlocked.Exchange(ref _stopRequested, 1) == 0)
+          {
+            StoppedAfterAttributableFailure = true;
+            _stopAfterFailure();
+          }
         }
       }
     }
