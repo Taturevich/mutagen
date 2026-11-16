@@ -597,6 +597,28 @@ public sealed class MutationEngineIntegrationTests
   }
 
   [Test]
+  public void CacheEnvironmentFingerprintIncludesCurrentCulture()
+  {
+    var originalCulture = System.Globalization.CultureInfo.CurrentCulture;
+    var originalUiCulture = System.Globalization.CultureInfo.CurrentUICulture;
+    try
+    {
+      System.Threading.Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.GetCultureInfo("en-US");
+      System.Threading.Thread.CurrentThread.CurrentUICulture = System.Globalization.CultureInfo.GetCultureInfo("en-US");
+      var first = Engine.EnvironmentFingerprint();
+      System.Threading.Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.GetCultureInfo("tr-TR");
+      System.Threading.Thread.CurrentThread.CurrentUICulture = System.Globalization.CultureInfo.GetCultureInfo("tr-TR");
+
+      Assert.That(Engine.EnvironmentFingerprint(), Is.Not.EqualTo(first));
+    }
+    finally
+    {
+      System.Threading.Thread.CurrentThread.CurrentCulture = originalCulture;
+      System.Threading.Thread.CurrentThread.CurrentUICulture = originalUiCulture;
+    }
+  }
+
+  [Test]
   public void CacheEnvironmentFingerprintPreservesDotnetPathSelectionOrder()
   {
     var root = Path.Combine(Path.GetTempPath(), "MutagenSdkPathFingerprint", Guid.NewGuid().ToString("N"));

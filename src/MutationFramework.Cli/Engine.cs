@@ -2466,7 +2466,12 @@ internal static class Engine
       values.Add($"DOTNET_SDK_ROOT={Hash(root + ":" + string.Join(",", versions))}");
     }
 
-    values.Add($"RUNTIME={Hash(System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription + ":" + Environment.Version)}");
+    var runtimeInputs = string.Join(":", System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription,
+        Environment.Version, System.Runtime.InteropServices.RuntimeInformation.OSDescription,
+        System.Runtime.InteropServices.RuntimeInformation.OSArchitecture,
+        System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture, TimeZoneInfo.Local.Id,
+        System.Globalization.CultureInfo.CurrentCulture.Name, System.Globalization.CultureInfo.CurrentUICulture.Name);
+    values.Add($"RUNTIME={Hash(runtimeInputs)}");
     return values.Order(StringComparer.Ordinal).ToArray();
   }
 
