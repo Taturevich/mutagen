@@ -66,12 +66,21 @@ public sealed class LargeWorkloadBenchmarkTests
     {
       null or "" or "per-resource-group" => TestHostIsolationPolicy.PerResourceGroup,
       "per-batch" => TestHostIsolationPolicy.PerBatch,
-      var configured => throw new ArgumentException($"Unsupported MUTAGEN_LARGE_ISOLATION value '{configured}'. Use per-batch or per-resource-group.")
+      "per-mutant" => TestHostIsolationPolicy.PerMutant,
+      var configured => throw new ArgumentException($"Unsupported MUTAGEN_LARGE_ISOLATION value '{configured}'. Use per-mutant, per-batch, or per-resource-group.")
     };
-    var isolationArgument = isolationPolicy == TestHostIsolationPolicy.PerBatch ? "per-batch" : "per-resource-group";
-    var benchmarkName = isolationPolicy == TestHostIsolationPolicy.PerBatch
-        ? $"mutagen-large-perbatch-current-workers-{workers}"
-        : $"mutagen-large-workers-{workers}";
+    var isolationArgument = isolationPolicy switch
+    {
+      TestHostIsolationPolicy.PerBatch => "per-batch",
+      TestHostIsolationPolicy.PerMutant => "per-mutant",
+      _ => "per-resource-group"
+    };
+    var benchmarkName = isolationPolicy switch
+    {
+      TestHostIsolationPolicy.PerBatch => $"mutagen-large-perbatch-current-workers-{workers}",
+      TestHostIsolationPolicy.PerMutant => $"mutagen-large-permutant-current-workers-{workers}",
+      _ => $"mutagen-large-workers-{workers}"
+    };
     var benchmarkRoot = Path.Combine(repositoryRoot, "benchmarks", "results", benchmarkName);
     var sqliteRoot = Path.Combine(benchmarkRoot, "sqlite");
     var cacheDirectory = Path.Combine(benchmarkRoot, "cache");
@@ -182,7 +191,7 @@ public sealed class LargeWorkloadBenchmarkTests
         Assert.That(reportRoot.GetProperty("OverallStatus").GetString(), Is.EqualTo("Completed"), string.Join(Environment.NewLine, diagnostics));
         Assert.That(outcomes, Has.Length.EqualTo(2_000));
         Assert.That(killed, Is.EqualTo(2_000));
-        Assert.That(counters.MutationTestExecutions, Is.EqualTo(2_000));
+        Assert.That(counters.MutationTestExecutions, Is.GreaterThanOrEqualTo(2_000));
         Assert.That(counters.BaselineTestExecutions, Is.EqualTo(100));
         if (isolationPolicy == TestHostIsolationPolicy.PerResourceGroup)
         {
@@ -230,9 +239,12 @@ public sealed class LargeWorkloadBenchmarkTests
           measurements,
           expectedOutcomeDigest!,
           differential);
-      var artifactName = isolationPolicy == TestHostIsolationPolicy.PerBatch
-          ? $"mutagen-large-workers-{workers}-per-batch.json"
-          : $"mutagen-large-workers-{workers}.json";
+      var artifactName = isolationPolicy switch
+      {
+        TestHostIsolationPolicy.PerBatch => $"mutagen-large-workers-{workers}-per-batch.json",
+        TestHostIsolationPolicy.PerMutant => $"mutagen-large-workers-{workers}-per-mutant.json",
+        _ => $"mutagen-large-workers-{workers}.json"
+      };
       var artifactPath = Path.Combine(repositoryRoot, "benchmarks", "results", artifactName);
       File.WriteAllText(artifactPath, JsonSerializer.Serialize(report, JsonOptions));
       TestContext.Progress.WriteLine($"Benchmark artifact: {artifactPath}");

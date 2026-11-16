@@ -551,7 +551,8 @@ internal static class Engine
       var resourceLockManager = new ResourceLockManager();
       long coverageElapsed = 0, probeSerializationMs = 0, coverageMappingMs = 0;
       timer.Restart();
-      var perTestCoverageInSharedHost = opt.TestHostIsolationPolicy is TestHostIsolationPolicy.PerBatch or TestHostIsolationPolicy.PerResourceGroup &&
+      var perTestCoverageInSharedHost =
+          opt.TestHostIsolationPolicy is TestHostIsolationPolicy.PerMutant or TestHostIsolationPolicy.PerBatch or TestHostIsolationPolicy.PerResourceGroup &&
           testCases.All(testCase => SupportsSerializedRunSettings(testCase.ExecutorUri));
       var baselineWorkerCount = opt.TestHostIsolationPolicy == TestHostIsolationPolicy.PerBatch ? 1
           : opt.TestHostIsolationPolicy == TestHostIsolationPolicy.PerResourceGroup ? Math.Min(opt.MaxWorkers, resourceGroups.Length)

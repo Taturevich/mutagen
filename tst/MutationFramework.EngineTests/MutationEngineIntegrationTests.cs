@@ -4514,8 +4514,8 @@ public sealed class MutationEngineIntegrationTests
       {
         var result = await MutationEngine.RunAsync(Options(2, output, mode, isolation));
         Assert.That(result.OverallStatus, Is.EqualTo("Completed"));
-        Assert.That(result.Mutants.Count, Is.EqualTo(32));
-        Assert.That(result.KilledCount, Is.EqualTo(23));
+        Assert.That(result.Mutants.Count, Is.EqualTo(34));
+        Assert.That(result.KilledCount, Is.EqualTo(25));
         Assert.That(result.SurvivedCount, Is.EqualTo(8));
         Assert.That(result.NoCoverageCount, Is.EqualTo(1));
         Assert.That(result.Counters.BaselineTestExecutions, Is.EqualTo(18));
@@ -4596,7 +4596,7 @@ public sealed class MutationEngineIntegrationTests
           profile.TestHostIsolationPolicy == TestHostIsolationPolicy.PerMutant), Is.True);
       Assert.That(result.ExecutionProfiles.All(profile => profile.TimeoutPolicy == TestRunTimeoutPolicy.AggregatePerMutant), Is.True);
       Assert.That(result.Counters.TestHostProcessStarts,
-          Is.EqualTo(result.Counters.TotalTests + result.Counters.TotalMutants - result.Counters.UncoveredMutants + 1));
+          Is.EqualTo(1 + result.Counters.TotalMutants - result.Counters.UncoveredMutants));
       Assert.That(result.Counters.TestHostProcessStarts,
           Is.LessThan(result.Counters.TotalTests + result.Counters.MutationTestExecutions + 1));
       Assert.That(result.ReportSchemaVersion, Is.EqualTo(4));

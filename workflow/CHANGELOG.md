@@ -288,3 +288,8 @@
 - Changed the SDK and CLI default from a separate testhost per test to one fresh testhost per mutant, running that mutant's covered tests together in one VSTest invocation. This matches normal grouped test execution while keeping mutants isolated from each other. Lock-bearing NUnit test groups run serially in that host while holding all declared locks; executors without supported serialization retain per-test isolation. Explicit `PerTest` remains available; validated result-cache reuse continues to require that stricter policy.
 - Updated the execution documentation and added an SDK default-policy test. A matched PerTest-vs-PerMutant large-workload benchmark is still required before claiming a measured resource or throughput improvement.
 
+# 2026-11-16 - Extend PerMutant host reuse through baseline and locked runs
+- PerMutant mode now collects exact NUnit baseline coverage in one serialized host and runs lock-bearing covered cases serially in one mutant host while holding the union of their declared resource locks. Non-NUnit executors that cannot honor serialization keep the conservative per-test fallback.
+- Extended the explicit three-run large SQLite benchmark to include PerMutant with the same 2,000 mutants, 100 tests, shard locks, and pinned Stryker differential checks. This supplies the missing matched large-workload comparison; no new performance result is claimed until it runs.
+- Corrected stale sample mutation-count expectations after adding source-derived candidates. The full earlier run passed 84 engine tests and failed only the stale count assertion; focused updated execution-policy tests passed 5/5, and the solution build completed with zero warnings/errors.
+
