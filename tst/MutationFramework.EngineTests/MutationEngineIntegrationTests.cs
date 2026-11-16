@@ -518,6 +518,56 @@ public sealed class MutationEngineIntegrationTests
     }
   }
 
+  [TestCase("TEMP")]
+  [TestCase("TMP")]
+  [TestCase("TMPDIR")]
+  [TestCase("NUMBER_OF_PROCESSORS")]
+  [TestCase("SESSIONNAME")]
+  public void CacheEnvironmentFingerprintIncludesStandardTestEnvironment(string name)
+  {
+    var original = Environment.GetEnvironmentVariable(name);
+    try
+    {
+      Environment.SetEnvironmentVariable(name, "mutagen-cache-test-value");
+      var first = Engine.EnvironmentFingerprint();
+      Environment.SetEnvironmentVariable(name, "mutagen-cache-test-value-changed");
+
+      Assert.That(Engine.EnvironmentFingerprint(), Is.Not.EqualTo(first), name);
+    }
+    finally
+    {
+      Environment.SetEnvironmentVariable(name, original);
+    }
+  }
+
+  [Test]
+  public void CacheEnvironmentFingerprintIncludesNonDotnetPathChanges()
+  {
+    var root = Path.Combine(Path.GetTempPath(), "MutagenPathFingerprint", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(root);
+    var firstDirectory = Path.Combine(root, "first");
+    var secondDirectory = Path.Combine(root, "second");
+    Directory.CreateDirectory(firstDirectory);
+    Directory.CreateDirectory(secondDirectory);
+    var originalPath = Environment.GetEnvironmentVariable("PATH");
+    try
+    {
+      Environment.SetEnvironmentVariable("PATH", firstDirectory);
+      var first = Engine.EnvironmentFingerprint();
+      Environment.SetEnvironmentVariable("PATH", secondDirectory);
+
+      Assert.That(Engine.EnvironmentFingerprint(), Is.Not.EqualTo(first));
+    }
+    finally
+    {
+      Environment.SetEnvironmentVariable("PATH", originalPath);
+      if (Directory.Exists(root))
+      {
+        Directory.Delete(root, true);
+      }
+    }
+  }
+
   [Test]
   public void CacheEnvironmentFingerprintPreservesDotnetPathSelectionOrder()
   {

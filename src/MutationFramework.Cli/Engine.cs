@@ -2439,22 +2439,21 @@ internal static class Engine
 
   private static string[] EnvironmentFingerprintParts()
   {
-    // PATH contains a per-invocation Codex command shim in this environment. Hashing it verbatim
-    // prevents cross-run reuse even though the selected .NET SDK is unchanged. Capture actual
-    // dotnet roots and their installed SDK versions instead; keep all other environment inputs.
-    var volatileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    {
-      "PATH", "TEMP", "TMP", "TMPDIR", "NUMBER_OF_PROCESSORS", "SESSIONNAME", "ChocolateyLastPathUpdate"
-    };
-    // Exclude only the known per-invocation identifier; other CODEX_* variables may configure tests.
-    volatileNames.Add("CODEX_TOOL_CALL_ID");
+    // Exclude only the known per-invocation identifier; other environment variables may configure tests.
+    var volatileNames = new HashSet<string>(["CODEX_TOOL_CALL_ID", "PATH"], StringComparer.OrdinalIgnoreCase);
     var values = Environment.GetEnvironmentVariables().Cast<System.Collections.DictionaryEntry>()
         .Where(entry => !volatileNames.Contains((string)entry.Key))
         .Select(entry => $"{entry.Key}={Hash(Convert.ToString(entry.Value, System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty)}")
         .Order(StringComparer.Ordinal).ToList();
-    var dotnetRoots = (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
+    // Tool invocations add random command-wrapper directories to PATH. Remove only those entries;
+    // preserve and hash the order of every other path because tests may launch native tools by name.
+    var normalizedPath = (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
         .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
         .Select(path => Path.GetFullPath(path.Trim('"')))
+        .Where(path => !Path.GetFileName(path).StartsWith("codex-arg0", StringComparison.OrdinalIgnoreCase))
+        .ToArray();
+    values.Add($"PATH={Hash(string.Join("|", normalizedPath))}");
+    var dotnetRoots = normalizedPath
         .Where(path => File.Exists(Path.Combine(path, OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet")))
         .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
     values.Add($"DOTNET_PATH_ORDER={Hash(string.Join("|", dotnetRoots.Select((root, index) => $"{index}:{root}")))}");
