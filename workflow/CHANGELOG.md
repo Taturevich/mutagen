@@ -312,3 +312,6 @@
 - Added regressions proving random `codex-arg0...` PATH wrapper names do not defeat cache reuse while real PATH changes remain part of the fingerprint, and current-culture changes invalidate execution fingerprints. All 11 environment-fingerprint tests pass.
 - Included OS/architecture, local time zone, and current thread cultures in the execution fingerprint, since the same compiled test assemblies may produce different outcomes under those process settings.
 - The final full solution run passed 318 tests (95 engine, 101 scale, 100 large-integration, 18 sample, and four isolation tests). The solution build completed with zero warnings/errors, formatting verification and `git diff --check` passed.
+
+# 2026-11-17 - Match Veronika Studio editor configuration
+- Replaced the repository `.editorconfig` with the exact Rider-project copy from `C:\Users\Ivan_\RiderProjects\veronika_studio`; SHA-256 hashes match. Ran `dotnet format` on the full solution and verified no formatting changes remained. The full solution build completed with zero warnings/errors.
