@@ -1,3 +1,4 @@
+using static MutationFramework.EngineTests.TestWorkspace;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using MutationFramework.Sdk;
@@ -12,6 +13,7 @@ namespace MutationFramework.EngineTests;
 public sealed class CoverageInstrumentationBenchmarkTests
 {
   [Test, Explicit("Measures steady-state mutation probe overhead; timings are machine-specific.")]
+  [Category("Performance")]
   public void CoverageInstrumentationOverheadIsMeasuredForMatchedCompiledWorkloads()
   {
     const int operationsPerSample = 5_000_000;
@@ -31,11 +33,11 @@ public sealed class CoverageInstrumentationBenchmarkTests
       TestProjects = [],
       Mutators = new HashSet<string>(["binary-operators"], StringComparer.Ordinal)
     };
-    var candidates = Engine.DiscoverCandidates([source], project, options, [], CancellationToken.None);
+    var candidates = MutationDiscovery.DiscoverCandidates([source], project, options, [], CancellationToken.None);
     Assert.That(candidates, Is.Not.Empty);
     File.Copy(source, instrumentedSource);
-    Engine.RewriteSources(new Dictionary<string, string> { [source] = instrumentedSource }, candidates, root, root);
-    var runtime = Engine.RuntimeSource(candidates.Select(candidate => candidate.SiteRuntimeId)
+    MutationSchemaBuilder.RewriteSources(new Dictionary<string, string> { [source] = instrumentedSource }, candidates, root, root);
+    var runtime = MutationRuntimeSource.RuntimeSource(candidates.Select(candidate => candidate.SiteRuntimeId)
         .Distinct(StringComparer.Ordinal).Count());
     var reportPath = Path.Combine(FindRepositoryRoot(), "benchmarks", "results", "coverage-overhead", "runtime-probe-microbenchmark.json");
     Directory.CreateDirectory(Path.GetDirectoryName(reportPath)!);
@@ -179,6 +181,7 @@ public sealed class CoverageInstrumentationBenchmarkTests
   }
 
   [Test, Explicit("Measures sparse per-test coverage drains; timings are machine-specific.")]
+  [Category("Performance")]
   public void SparseCoverageDrainOverheadIsMeasuredForMatchedCompiledWorkloads()
   {
     const int siteCount = 512;
@@ -186,7 +189,7 @@ public sealed class CoverageInstrumentationBenchmarkTests
     const int samples = 7;
     const string previousDrain = "if (Interlocked.Exchange(ref Hits[index], 0) != 0) { sites.Add(index); }";
     const string guardedDrain = "if (Volatile.Read(ref Hits[index]) != 0 && Interlocked.Exchange(ref Hits[index], 0) != 0) { sites.Add(index); }";
-    var optimizedRuntime = Engine.RuntimeSource(siteCount);
+    var optimizedRuntime = MutationRuntimeSource.RuntimeSource(siteCount);
     var previousRuntime = optimizedRuntime.Replace(guardedDrain, previousDrain, StringComparison.Ordinal);
     Assert.That(previousRuntime, Does.Contain(previousDrain));
     var source = "public static class Workload { public static long Execute(int iterations) { long total = 0; for (int i = 0; i < iterations; i++) { MutationRuntime.Hit(0); MutationRuntime.Hit(128); MutationRuntime.Hit(511); total += MutationRuntime.GetCoverageData().Length; } return total; } }";
@@ -290,6 +293,7 @@ public sealed class CoverageInstrumentationBenchmarkTests
   }
 
   [Test, Explicit("Measures cached per-test coverage reader lookup; timings are machine-specific.")]
+  [Category("Performance")]
   public void CachedCoverageReadersAvoidRepeatedAssemblyReflection()
   {
     const int operationsPerSample = 2_000;
@@ -355,7 +359,7 @@ public sealed class CoverageInstrumentationBenchmarkTests
       var trees = new[]
       {
         CSharpSyntaxTree.ParseText(workload, new CSharpParseOptions(LanguageVersion.Preview), "Workload.cs"),
-        CSharpSyntaxTree.ParseText(Engine.RuntimeSource(1), new CSharpParseOptions(LanguageVersion.Preview), "MutationRuntime.g.cs")
+        CSharpSyntaxTree.ParseText(MutationRuntimeSource.RuntimeSource(1), new CSharpParseOptions(LanguageVersion.Preview), "MutationRuntime.g.cs")
       };
       var compilation = CSharpCompilation.Create(name, trees, references,
           new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, optimizationLevel: OptimizationLevel.Release));
@@ -394,15 +398,5 @@ public sealed class CoverageInstrumentationBenchmarkTests
   private sealed record Measurement(double MedianMilliseconds, double[] SamplesMilliseconds,
       long MedianAllocatedBytesPerSample, long Checksum);
 
-  private static string FindRepositoryRoot()
-  {
-    for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-    {
-      if (File.Exists(Path.Combine(directory.FullName, "MutationFramework.slnx")))
-      {
-        return directory.FullName;
-      }
-    }
-    throw new DirectoryNotFoundException("Unable to locate MutationFramework.slnx from the benchmark test output directory.");
-  }
+
 }

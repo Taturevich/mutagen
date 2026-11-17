@@ -1,0 +1,766 @@
+{
+  "schemaVersion": 1,
+  "baselineRevision": "9324db82434a5e482502dac972254efd35fb903b",
+  "candidateRevision": "commit containing this artifact",
+  "measuredOn": "2026-11-17",
+  "environment": {
+    "framework": ".NET 11.0.0",
+    "os": "Microsoft Windows 10.0.19045",
+    "processorCount": 4,
+    "compilationOptimization": "Release",
+    "benchmarkHarness": "Roslyn-emitted steady-state method microbenchmark"
+  },
+  "methodology": {
+    "ordering": "alternating baseline/candidate; reverse order on alternating iterations",
+    "memorySamplingMs": 100,
+    "memoryScope": "CLI process and its descendants; sampled working set, not exact allocations",
+    "regressionInvestigationThresholdPercent": 5,
+    "reportSchemaVersion": 4,
+    "cacheMetadataEnvelopeVersion": 1,
+    "limitations": [
+      "Three samples per revision are machine-specific observations, not a general throughput claim.",
+      "Before/after test-suite times have different test counts and order; they are not a controlled performance comparison.",
+      "Runtime microbenchmarks are final-build functional/allocation observations; their internal variants are not pre/post-refactor revisions."
+    ]
+  },
+  "workloads": [
+    {
+      "workload": "small",
+      "samplesPerRevision": 3,
+      "warmupsPerRevision": 1,
+      "mutants": 34,
+      "equivalenceDigest": "7a9812766c4244c2ec917778f16ebd41e52a32b3dfeae88118a62752ba814de5",
+      "allRunsEquivalent": true,
+      "profile": {
+        "workers": 4,
+        "executionMode": "Batched",
+        "hostIsolation": "PerBatch",
+        "resourceLocks": false
+      },
+      "revisions": {
+        "baseline": {
+          "wallMsMedian": 12061.004900024273,
+          "reportMsMedian": 11775,
+          "peakAggregateRssBytesMedian": 679211008,
+          "phaseMsMedians": {
+            "DiscoveryMs": 2072,
+            "BuildMs": 1394,
+            "BaselineMs": 968,
+            "CoverageMs": 34,
+            "MutationGenerationMs": 52,
+            "ExecutionMs": 6194,
+            "ReportingMs": 103,
+            "ProbeSerializationMs": 0,
+            "CoverageMappingMs": 34,
+            "ProjectEvaluationMs": 194,
+            "ProjectCopyMs": 16,
+            "InstrumentationMs": 272,
+            "MutationPlanningMs": 22,
+            "WorkerInitializationMs": 51
+          },
+          "countersMedians": {
+            "TotalMutants": 34,
+            "CoveredMutants": 33,
+            "UncoveredMutants": 1,
+            "TotalTests": 18,
+            "BaselineTestExecutions": 18,
+            "MutationTestExecutions": 54,
+            "TestRunnerProcessStarts": 5,
+            "TestDiscoveryOperations": 1,
+            "BuildInvocations": 0,
+            "WorkerRestarts": 0,
+            "WorkerFailures": 0,
+            "MutationBatches": 11,
+            "AverageMutantsPerBatch": 3,
+            "TotalWorkerBusyTimeMs": 23607,
+            "TotalWorkerIdleTimeMs": 1258,
+            "TestHostProcessStarts": 13
+          },
+          "cacheHitsMedian": 26,
+          "cacheInvalidationsMedian": 0,
+          "wallMsSamples": [
+            12046.869500016328,
+            12061.004900024273,
+            12918.322099954821
+          ]
+        },
+        "candidate": {
+          "wallMsMedian": 11369.393500033766,
+          "reportMsMedian": 11177,
+          "peakAggregateRssBytesMedian": 608546816,
+          "phaseMsMedians": {
+            "DiscoveryMs": 2028,
+            "BuildMs": 1323,
+            "BaselineMs": 1049,
+            "CoverageMs": 34,
+            "MutationGenerationMs": 47,
+            "ExecutionMs": 5687,
+            "ReportingMs": 68,
+            "ProbeSerializationMs": 0,
+            "CoverageMappingMs": 34,
+            "ProjectEvaluationMs": 206,
+            "ProjectCopyMs": 17,
+            "InstrumentationMs": 261,
+            "MutationPlanningMs": 24,
+            "WorkerInitializationMs": 36
+          },
+          "countersMedians": {
+            "TotalMutants": 34,
+            "CoveredMutants": 33,
+            "UncoveredMutants": 1,
+            "TotalTests": 18,
+            "BaselineTestExecutions": 18,
+            "MutationTestExecutions": 54,
+            "TestRunnerProcessStarts": 5,
+            "TestDiscoveryOperations": 1,
+            "BuildInvocations": 0,
+            "WorkerRestarts": 0,
+            "WorkerFailures": 0,
+            "MutationBatches": 11,
+            "AverageMutantsPerBatch": 3,
+            "TotalWorkerBusyTimeMs": 21262,
+            "TotalWorkerIdleTimeMs": 1663,
+            "TestHostProcessStarts": 13
+          },
+          "cacheHitsMedian": 26,
+          "cacheInvalidationsMedian": 0,
+          "wallMsSamples": [
+            12563.850299979094,
+            11369.393500033766,
+            10874.780100013595
+          ]
+        }
+      },
+      "wallMsChangePercent": -5.734276751592349
+    },
+    {
+      "workload": "medium",
+      "samplesPerRevision": 3,
+      "warmupsPerRevision": 1,
+      "mutants": 206,
+      "equivalenceDigest": "64271a44c9374da4ac1ecc2c4fa1829b4f494c027352e70f99d0fbd0a6727d18",
+      "allRunsEquivalent": true,
+      "profile": {
+        "workers": 4,
+        "executionMode": "Batched",
+        "hostIsolation": "PerBatch",
+        "resourceLocks": false
+      },
+      "revisions": {
+        "baseline": {
+          "wallMsMedian": 12212.439200025983,
+          "reportMsMedian": 11927,
+          "peakAggregateRssBytesMedian": 728858624,
+          "phaseMsMedians": {
+            "DiscoveryMs": 1984,
+            "BuildMs": 1839,
+            "BaselineMs": 985,
+            "CoverageMs": 248,
+            "MutationGenerationMs": 42,
+            "ExecutionMs": 6247,
+            "ReportingMs": 88,
+            "ProbeSerializationMs": 0,
+            "CoverageMappingMs": 248,
+            "ProjectEvaluationMs": 234,
+            "ProjectCopyMs": 9,
+            "InstrumentationMs": 431,
+            "MutationPlanningMs": 31,
+            "WorkerInitializationMs": 61
+          },
+          "countersMedians": {
+            "TotalMutants": 206,
+            "CoveredMutants": 206,
+            "UncoveredMutants": 0,
+            "TotalTests": 101,
+            "BaselineTestExecutions": 101,
+            "MutationTestExecutions": 609,
+            "TestRunnerProcessStarts": 5,
+            "TestDiscoveryOperations": 1,
+            "BuildInvocations": 0,
+            "WorkerRestarts": 0,
+            "WorkerFailures": 0,
+            "MutationBatches": 8,
+            "AverageMutantsPerBatch": 25.75,
+            "TotalWorkerBusyTimeMs": 23503,
+            "TotalWorkerIdleTimeMs": 1485,
+            "TestHostProcessStarts": 10
+          },
+          "cacheHitsMedian": 109,
+          "cacheInvalidationsMedian": 0,
+          "wallMsSamples": [
+            11309.957699966617,
+            12212.439200025983,
+            17324.867800052743
+          ]
+        },
+        "candidate": {
+          "wallMsMedian": 12726.223599980585,
+          "reportMsMedian": 12488,
+          "peakAggregateRssBytesMedian": 659783680,
+          "phaseMsMedians": {
+            "DiscoveryMs": 2603,
+            "BuildMs": 1325,
+            "BaselineMs": 1434,
+            "CoverageMs": 344,
+            "MutationGenerationMs": 35,
+            "ExecutionMs": 5472,
+            "ReportingMs": 114,
+            "ProbeSerializationMs": 0,
+            "CoverageMappingMs": 344,
+            "ProjectEvaluationMs": 204,
+            "ProjectCopyMs": 8,
+            "InstrumentationMs": 334,
+            "MutationPlanningMs": 32,
+            "WorkerInitializationMs": 62
+          },
+          "countersMedians": {
+            "TotalMutants": 206,
+            "CoveredMutants": 206,
+            "UncoveredMutants": 0,
+            "TotalTests": 101,
+            "BaselineTestExecutions": 101,
+            "MutationTestExecutions": 609,
+            "TestRunnerProcessStarts": 5,
+            "TestDiscoveryOperations": 1,
+            "BuildInvocations": 0,
+            "WorkerRestarts": 0,
+            "WorkerFailures": 0,
+            "MutationBatches": 8,
+            "AverageMutantsPerBatch": 25.75,
+            "TotalWorkerBusyTimeMs": 21531,
+            "TotalWorkerIdleTimeMs": 379,
+            "TestHostProcessStarts": 10
+          },
+          "cacheHitsMedian": 109,
+          "cacheInvalidationsMedian": 0,
+          "wallMsSamples": [
+            11655.386300000828,
+            12726.223599980585,
+            14085.662800003774
+          ]
+        }
+      },
+      "wallMsChangePercent": 4.20705799668184
+    },
+    {
+      "workload": "large",
+      "samplesPerRevision": 3,
+      "warmupsPerRevision": 1,
+      "mutants": 2000,
+      "equivalenceDigest": "15db929bb335cc36d2e43643e2f1fee44132bfa66dccf7bf7cda8b351a4d05ce",
+      "allRunsEquivalent": true,
+      "profile": {
+        "workers": 4,
+        "executionMode": "Batched",
+        "hostIsolation": "PerBatch",
+        "resourceLocks": true
+      },
+      "revisions": {
+        "baseline": {
+          "wallMsMedian": 48169.587500044145,
+          "reportMsMedian": 47715,
+          "peakAggregateRssBytesMedian": 374034432,
+          "phaseMsMedians": {
+            "DiscoveryMs": 2353,
+            "BuildMs": 2414,
+            "BaselineMs": 2603,
+            "CoverageMs": 464,
+            "MutationGenerationMs": 56,
+            "ExecutionMs": 33902,
+            "ReportingMs": 147,
+            "ProbeSerializationMs": 0,
+            "CoverageMappingMs": 464,
+            "ProjectEvaluationMs": 232,
+            "ProjectCopyMs": 14,
+            "InstrumentationMs": 3847,
+            "MutationPlanningMs": 91,
+            "WorkerInitializationMs": 7
+          },
+          "countersMedians": {
+            "TotalMutants": 2000,
+            "CoveredMutants": 2000,
+            "UncoveredMutants": 0,
+            "TotalTests": 100,
+            "BaselineTestExecutions": 100,
+            "MutationTestExecutions": 2000,
+            "TestRunnerProcessStarts": 2,
+            "TestDiscoveryOperations": 1,
+            "BuildInvocations": 0,
+            "WorkerRestarts": 0,
+            "WorkerFailures": 0,
+            "MutationBatches": 20,
+            "AverageMutantsPerBatch": 100,
+            "TotalWorkerBusyTimeMs": 33877,
+            "TotalWorkerIdleTimeMs": 23,
+            "TestHostProcessStarts": 22
+          },
+          "cacheHitsMedian": 108,
+          "cacheInvalidationsMedian": 0,
+          "wallMsSamples": [
+            48169.587500044145,
+            48545.779899985064,
+            47712.18389994465
+          ]
+        },
+        "candidate": {
+          "wallMsMedian": 48675.25170004228,
+          "reportMsMedian": 48344,
+          "peakAggregateRssBytesMedian": 290680832,
+          "phaseMsMedians": {
+            "DiscoveryMs": 2339,
+            "BuildMs": 2487,
+            "BaselineMs": 2587,
+            "CoverageMs": 286,
+            "MutationGenerationMs": 80,
+            "ExecutionMs": 34692,
+            "ReportingMs": 146,
+            "ProbeSerializationMs": 0,
+            "CoverageMappingMs": 286,
+            "ProjectEvaluationMs": 243,
+            "ProjectCopyMs": 15,
+            "InstrumentationMs": 3969,
+            "MutationPlanningMs": 67,
+            "WorkerInitializationMs": 6
+          },
+          "countersMedians": {
+            "TotalMutants": 2000,
+            "CoveredMutants": 2000,
+            "UncoveredMutants": 0,
+            "TotalTests": 100,
+            "BaselineTestExecutions": 100,
+            "MutationTestExecutions": 2000,
+            "TestRunnerProcessStarts": 2,
+            "TestDiscoveryOperations": 1,
+            "BuildInvocations": 0,
+            "WorkerRestarts": 0,
+            "WorkerFailures": 0,
+            "MutationBatches": 20,
+            "AverageMutantsPerBatch": 100,
+            "TotalWorkerBusyTimeMs": 34672,
+            "TotalWorkerIdleTimeMs": 20,
+            "TestHostProcessStarts": 22
+          },
+          "cacheHitsMedian": 108,
+          "cacheInvalidationsMedian": 0,
+          "wallMsSamples": [
+            47836.47679997375,
+            49786.641100014094,
+            48675.25170004228
+          ]
+        }
+      },
+      "wallMsChangePercent": 1.0497582110240655
+    }
+  ],
+  "sourceMetrics": {
+    "before": {
+      "src": [
+        {
+          "Path": "src/MutationFramework.Cli/Engine.cs",
+          "Bytes": 204425
+        },
+        {
+          "Path": "src/MutationFramework.Mutators/Mutators.cs",
+          "Bytes": 56887
+        },
+        {
+          "Path": "src/MutationFramework.Cli/TestPlatformSession.cs",
+          "Bytes": 22034
+        },
+        {
+          "Path": "src/MutationFramework.Cli/ArtifactCache.cs",
+          "Bytes": 8988
+        },
+        {
+          "Path": "src/MutationFramework.Cli/MutationPlanner.cs",
+          "Bytes": 6873
+        }
+      ],
+      "tst": [
+        {
+          "Path": "tst/MutationFramework.EngineTests/MutationEngineIntegrationTests.cs",
+          "Bytes": 325606
+        },
+        {
+          "Path": "tst/MutationFramework.EngineTests/LargeWorkloadBenchmarkTests.cs",
+          "Bytes": 27070
+        },
+        {
+          "Path": "tst/MutationFramework.EngineTests/CoverageInstrumentationBenchmarkTests.cs",
+          "Bytes": 23664
+        },
+        {
+          "Path": "tst/MutationFramework.EngineTests/ParityMatrixEvidenceTests.cs",
+          "Bytes": 8018
+        },
+        {
+          "Path": "tst/MutationFramework.EngineTests/ArchitectureBoundaryTests.cs",
+          "Bytes": 4908
+        }
+      ]
+    },
+    "after": {
+      "src": [
+        {
+          "Path": "src/MutationFramework.Cli/Mutations/MutationSchemaBuilder.cs",
+          "Bytes": 27733,
+          "Lines": 486
+        },
+        {
+          "Path": "src/MutationFramework.Cli/Compilation/CompilationWorkspace.cs",
+          "Bytes": 20453,
+          "Lines": 370
+        },
+        {
+          "Path": "src/MutationFramework.Cli/Compilation/MutationWorkspace.cs",
+          "Bytes": 16995,
+          "Lines": 371
+        },
+        {
+          "Path": "src/MutationFramework.Cli/Mutations/MutationDiscovery.cs",
+          "Bytes": 15126,
+          "Lines": 235
+        },
+        {
+          "Path": "src/MutationFramework.Cli/Compilation/BuildInputs.cs",
+          "Bytes": 15003,
+          "Lines": 365
+        }
+      ],
+      "tst": [
+        {
+          "Path": "tst/MutationFramework.EngineTests/MethodConformanceTests.cs",
+          "Bytes": 61130,
+          "Lines": 877
+        },
+        {
+          "Path": "tst/MutationFramework.EngineTests/CachingTests.cs",
+          "Bytes": 46824,
+          "Lines": 900
+        },
+        {
+          "Path": "tst/MutationFramework.EngineTests/ExpressionConformanceTests.cs",
+          "Bytes": 43990,
+          "Lines": 617
+        },
+        {
+          "Path": "tst/MutationFramework.EngineTests/StatementConformanceTests.cs",
+          "Bytes": 43923,
+          "Lines": 503
+        },
+        {
+          "Path": "tst/MutationFramework.EngineTests/CompilationWorkspaceTests.cs",
+          "Bytes": 39066,
+          "Lines": 647
+        }
+      ]
+    },
+    "productionProjectsBefore": 3,
+    "productionProjectsAfter": 3
+  },
+  "publicApi": [
+    {
+      "assembly": "MutationFramework.Cli",
+      "beforeMembers": 547,
+      "afterMembers": 547,
+      "removed": [],
+      "added": []
+    },
+    {
+      "assembly": "MutationFramework.Mutators",
+      "beforeMembers": 96,
+      "afterMembers": 96,
+      "removed": [],
+      "added": []
+    }
+  ],
+  "runtimeSource": {
+    "identicalRuntime": true,
+    "baselineCharacters": 2489,
+    "candidateCharacters": 2489,
+    "sameNormalizedLineEndings": true
+  },
+  "strykerLargeDifferential": {
+    "ReferenceVersion": "5.0.0",
+    "MutagenMutants": 2000,
+    "StrykerMutants": 2000,
+    "Common": 2000,
+    "MutagenOnly": 0,
+    "StrykerOnly": 0,
+    "OutcomeDifferences": 0,
+    "CoverageAssociationDifferences": 0,
+    "StrykerReportPath": "<repository>\\benchmarks\\results\\stryker-large-sqlite-5.0.0\\reports\\mutation-report.json"
+  },
+  "normalTests": [
+    {
+      "file": "artifacts/refactoring/final-tests-corrected/final_net11.0_20261117111254.trx",
+      "assembly": "isolationsample.tests.dll",
+      "total": 4,
+      "passed": 4,
+      "failed": 0,
+      "durationSeconds": 2.506234
+    },
+    {
+      "file": "artifacts/refactoring/final-tests-corrected/final_net11.0_20261117111259.trx",
+      "assembly": "largeintegrationsample.tests.dll",
+      "total": 100,
+      "passed": 100,
+      "failed": 0,
+      "durationSeconds": 7.386247
+    },
+    {
+      "file": "artifacts/refactoring/final-tests-corrected/final_net11.0_20261117111300.trx",
+      "assembly": "sampleapplication.tests.dll",
+      "total": 18,
+      "passed": 18,
+      "failed": 0,
+      "durationSeconds": 4.951274
+    },
+    {
+      "file": "artifacts/refactoring/final-tests-corrected/final_net11.0_20261117111301.trx",
+      "assembly": "scalesample.tests.dll",
+      "total": 101,
+      "passed": 101,
+      "failed": 0,
+      "durationSeconds": 6.518944
+    },
+    {
+      "file": "artifacts/refactoring/final-tests-corrected/final_net11.0_20261117113043.trx",
+      "assembly": "mutationframework.enginetests.dll",
+      "total": 121,
+      "passed": 116,
+      "failed": 0,
+      "durationSeconds": 1060.907152
+    }
+  ],
+  "normalTestsPassed": 339,
+  "microbenchmarksPassed": 3,
+  "baselineTests": [
+    {
+      "file": "artifacts/refactoring/baseline-tests/baseline_net11.0_20261117093159.trx",
+      "assembly": "isolationsample.tests.dll",
+      "total": 4,
+      "passed": 4,
+      "failed": 0,
+      "durationSeconds": 1.892096
+    },
+    {
+      "file": "artifacts/refactoring/baseline-tests/baseline_net11.0_20261117093201.trx",
+      "assembly": "scalesample.tests.dll",
+      "total": 101,
+      "passed": 101,
+      "failed": 0,
+      "durationSeconds": 2.700203
+    },
+    {
+      "file": "artifacts/refactoring/baseline-tests/baseline_net11.0_20261117093202.trx",
+      "assembly": "largeintegrationsample.tests.dll",
+      "total": 100,
+      "passed": 100,
+      "failed": 0,
+      "durationSeconds": 4.067052
+    },
+    {
+      "file": "artifacts/refactoring/baseline-tests/baseline_net11.0_20261117093203.trx",
+      "assembly": "sampleapplication.tests.dll",
+      "total": 18,
+      "passed": 18,
+      "failed": 0,
+      "durationSeconds": 1.91872
+    },
+    {
+      "file": "artifacts/refactoring/baseline-tests/baseline_net11.0_20261117095011.trx",
+      "assembly": "mutationframework.enginetests.dll",
+      "total": 100,
+      "passed": 94,
+      "failed": 1,
+      "durationSeconds": 1086.925165
+    }
+  ],
+  "microbenchmarks": {
+    "runtime-probe-microbenchmark": {
+      "schemaVersion": 1,
+      "measuredAtUtc": "2026-11-17T11:06:01.475565+00:00",
+      "environment": {
+        "framework": ".NET 11.0.0",
+        "os": "Microsoft Windows 10.0.19045",
+        "processorCount": 4,
+        "compilationOptimization": "Release",
+        "benchmarkHarness": "Roslyn-emitted steady-state method microbenchmark"
+      },
+      "workload": {
+        "method": "long Execute(int iterations)",
+        "operationsPerSample": 5000000,
+        "samples": 7,
+        "mutationCandidates": 6,
+        "distinctCoverageSites": 5,
+        "identicalOriginalBehavior": true
+      },
+      "results": {
+        "uninstrumented": {
+          "MedianMilliseconds": 3.1689,
+          "SamplesMilliseconds": [
+            3.1568,
+            3.1601,
+            3.1674,
+            3.1689,
+            3.2229,
+            3.4088,
+            3.6588
+          ],
+          "MedianAllocatedBytesPerSample": 40,
+          "Checksum": 12499997500000
+        },
+        "mutationChecksWithoutCoverage": {
+          "MedianMilliseconds": 397.3358,
+          "SamplesMilliseconds": [
+            132.6765,
+            135.3205,
+            136.4154,
+            397.3358,
+            489.1296,
+            565.2927,
+            763.8587
+          ],
+          "MedianAllocatedBytesPerSample": 392,
+          "Checksum": 12499997500000
+        },
+        "coverageProbesEnabled": {
+          "MedianMilliseconds": 145.3173,
+          "SamplesMilliseconds": [
+            134.2492,
+            136.5432,
+            143.1752,
+            145.3173,
+            145.9418,
+            149.3939,
+            212.0097
+          ],
+          "MedianAllocatedBytesPerSample": 392,
+          "Checksum": 12499997500000
+        },
+        "mutationCheckOverheadPercent": 12438.603300829942,
+        "enabledCoverageProbeOverheadPercent": 4485.7332197292435,
+        "coverageProbeIncrementalOverheadPercent": -63.42708107348999
+      },
+      "limitations": [
+        "This isolates steady-state instrumented expression execution in one compiled method; it is not an end-to-end test-suite or testhost benchmark.",
+        "Probe serialization at process exit, build time, test discovery, and baseline test scheduling are excluded.",
+        "Results are machine-specific and use one local run; use the existing multi-run workload benchmarks for end-to-end comparisons."
+      ]
+    },
+    "coverage-drain-microbenchmark": {
+      "schemaVersion": 1,
+      "measuredAtUtc": "2026-11-17T11:06:03.076325+00:00",
+      "environment": {
+        "framework": ".NET 11.0.0",
+        "os": "Microsoft Windows 10.0.19045",
+        "processorCount": 4,
+        "compilationOptimization": "Release",
+        "benchmarkHarness": "Roslyn-emitted sparse per-test coverage drain"
+      },
+      "workload": {
+        "siteCount": 512,
+        "operationsPerSample": 10000,
+        "samples": 7,
+        "activeSitesPerDrain": 3,
+        "identicalCoverageChecksum": true
+      },
+      "results": {
+        "previousAtomicExchangeEverySite": {
+          "MedianMilliseconds": 59.4836,
+          "SamplesMilliseconds": [
+            55.2829,
+            56.2379,
+            57.4267,
+            59.4836,
+            59.547,
+            60.1207,
+            62.9546
+          ],
+          "MedianAllocatedBytesPerSample": 1120040,
+          "Checksum": 30000
+        },
+        "guardedExchangeForHitSites": {
+          "MedianMilliseconds": 25.1523,
+          "SamplesMilliseconds": [
+            24.5061,
+            24.9828,
+            25.0284,
+            25.1523,
+            25.3947,
+            26.6673,
+            30.2692
+          ],
+          "MedianAllocatedBytesPerSample": 1120040,
+          "Checksum": 30000
+        },
+        "improvementPercent": 57.71557202321312
+      },
+      "limitations": [
+        "This isolates coverage-map drains in one compiled method; it is not an end-to-end testhost benchmark.",
+        "The sparse-hit ratio and site count model one workload and should be compared with integration-suite measurements.",
+        "The benchmark is machine-specific and does not measure concurrent test execution."
+      ]
+    },
+    "coverage-reader-cache-microbenchmark": {
+      "schemaVersion": 1,
+      "measuredAtUtc": "2026-11-17T11:05:56.3417496+00:00",
+      "environment": {
+        "framework": ".NET 11.0.0",
+        "os": "Microsoft Windows 10.0.19045",
+        "processorCount": 4,
+        "compilationOptimization": "Release",
+        "loadedAssemblyCount": 71
+      },
+      "workload": {
+        "operationsPerSample": 2000,
+        "samples": 7,
+        "identicalCoverageChecksum": true
+      },
+      "results": {
+        "repeatedAssemblyReflection": {
+          "MedianMilliseconds": 76.5437,
+          "SamplesMilliseconds": [
+            67.4409,
+            69.0089,
+            75.21,
+            76.5437,
+            77.2991,
+            77.6399,
+            90.4753
+          ],
+          "MedianAllocatedBytesPerSample": 22528040,
+          "Checksum": 2000
+        },
+        "cachedTypedReader": {
+          "MedianMilliseconds": 1.1945,
+          "SamplesMilliseconds": [
+            0.8118,
+            0.983,
+            1.0468,
+            1.1945,
+            1.3531,
+            1.4384,
+            4.447
+          ],
+          "MedianAllocatedBytesPerSample": 832040,
+          "Checksum": 2000
+        },
+        "improvementPercent": 98.43945354091845
+      },
+      "limitations": [
+        "This measures the collector's assembly lookup and invocation in the engine test process, not a full VSTest run.",
+        "The loaded assembly count and process environment are machine-specific; integration measurements remain necessary."
+      ]
+    }
+  },
+  "sdkSample": {
+    "status": "Completed",
+    "mutants": 34,
+    "killed": 25,
+    "survived": 8,
+    "noCoverage": 1
+  },
+  "cliReportRoundtrip": true
+}

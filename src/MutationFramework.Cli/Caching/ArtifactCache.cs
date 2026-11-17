@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Buffers.Binary;
 
 namespace MutationFramework.Sdk;
@@ -9,13 +10,16 @@ internal readonly record struct ArtifactCacheRead<T>(bool Found, T? Value, strin
 
 internal sealed class ArtifactCache(string root)
 {
+  private const int MetadataSchemaVersion = 1;
+  private sealed record MetadataEnvelope([property: JsonPropertyName("$mutagen-cache")] int SchemaVersion,
+      string ContentKey, JsonElement Payload, string IntegrityHash);
   private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
   private readonly string _root = Path.GetFullPath(root);
 
   public async Task<ArtifactCacheRead<T>> TryReadAsync<T>(string phase, string logicalIdentity, string contentKey,
       CancellationToken cancellationToken = default)
   {
-    var logicalPath = Path.Combine(_root, phase, "index", Hash(logicalIdentity) + ".json");
+    var logicalPath = Path.Combine(_root, phase, "index", CacheIdentity.Hash(logicalIdentity) + ".json");
     var artifactPath = Path.Combine(_root, phase, contentKey + ".json");
     string? previousKey;
     using (await AcquireWriteLockAsync(logicalPath, cancellationToken))
@@ -27,21 +31,19 @@ internal sealed class ArtifactCache(string root)
     {
       try
       {
-        T? value;
+        string? artifact;
         using (await AcquireWriteLockAsync(artifactPath, cancellationToken))
         {
-          value = File.Exists(artifactPath)
-              ? JsonSerializer.Deserialize<T>(await ReadSharedTextAsync(artifactPath, cancellationToken), JsonOptions)
-              : default;
+          artifact = File.Exists(artifactPath) ? await ReadSharedTextAsync(artifactPath, cancellationToken) : null;
         }
-
-        if (value is not null)
+        if (artifact is not null)
         {
-          return new(true, value, $"CacheHit: {phase} {contentKey}");
+          return ReadMetadata<T>(artifact, phase, contentKey);
         }
       }
       catch (JsonException)
       {
+        return InvalidMetadata<T>(phase, contentKey, "metadata is malformed or has an incompatible payload");
       }
     }
 
@@ -55,12 +57,44 @@ internal sealed class ArtifactCache(string root)
       CancellationToken cancellationToken = default)
   {
     var phaseRoot = Path.Combine(_root, phase);
-    var logicalPath = Path.Combine(phaseRoot, "index", Hash(logicalIdentity) + ".json");
+    var logicalPath = Path.Combine(phaseRoot, "index", CacheIdentity.Hash(logicalIdentity) + ".json");
     var artifactPath = Path.Combine(phaseRoot, contentKey + ".json");
     Directory.CreateDirectory(Path.GetDirectoryName(logicalPath)!);
-    await WriteAtomicAsync(artifactPath, JsonSerializer.Serialize(value), cancellationToken);
+    var payload = JsonSerializer.SerializeToElement(value);
+    var envelope = new MetadataEnvelope(MetadataSchemaVersion, contentKey, payload, CacheIdentity.Hash(payload.GetRawText()));
+    await WriteAtomicAsync(artifactPath, JsonSerializer.Serialize(envelope), cancellationToken);
     await WriteAtomicAsync(logicalPath, contentKey, cancellationToken);
   }
+
+  private static ArtifactCacheRead<T> ReadMetadata<T>(string artifact, string phase, string contentKey)
+  {
+    using var document = JsonDocument.Parse(artifact);
+    if (document.RootElement.ValueKind != JsonValueKind.Object || !document.RootElement.TryGetProperty("$mutagen-cache", out _))
+    {
+      // Version 0 stored raw payloads without an integrity check. Recompute rather than
+      // promoting unverifiable metadata; indexes, keys and content-addressed blobs remain valid.
+      return InvalidMetadata<T>(phase, contentKey, "legacy unversioned metadata requires verified recomputation");
+    }
+    var envelope = document.RootElement.Deserialize<MetadataEnvelope>(JsonOptions);
+    if (envelope is null || envelope.SchemaVersion != MetadataSchemaVersion)
+    {
+      return InvalidMetadata<T>(phase, contentKey, "unsupported metadata schema version");
+    }
+    if (!string.Equals(envelope.ContentKey, contentKey, StringComparison.Ordinal) || envelope.Payload.ValueKind == JsonValueKind.Undefined)
+    {
+      return InvalidMetadata<T>(phase, contentKey, "metadata content identity or payload is invalid");
+    }
+    if (!string.Equals(envelope.IntegrityHash, CacheIdentity.Hash(envelope.Payload.GetRawText()), StringComparison.Ordinal))
+    {
+      return InvalidMetadata<T>(phase, contentKey, "metadata payload integrity check failed");
+    }
+    var value = envelope.Payload.Deserialize<T>(JsonOptions);
+    return value is null ? InvalidMetadata<T>(phase, contentKey, "metadata payload is null")
+        : new(true, value, $"CacheHit: {phase} {contentKey}");
+  }
+
+  private static ArtifactCacheRead<T> InvalidMetadata<T>(string phase, string contentKey, string reason) =>
+      new(false, default, $"CacheInvalidated: {phase} {contentKey} ({reason})");
 
   public async Task<string> StoreBlobAsync(string phase, string sourcePath, CancellationToken cancellationToken = default)
   {
@@ -144,7 +178,6 @@ internal sealed class ArtifactCache(string root)
     return Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
   }
 
-  private static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
 
   private static async Task<string> ReadSharedTextAsync(string path, CancellationToken cancellationToken)
   {
@@ -192,7 +225,7 @@ internal sealed class ArtifactCache(string root)
   {
     var lockDirectory = Path.Combine(_root, ".locks");
     Directory.CreateDirectory(lockDirectory);
-    var lockPath = Path.Combine(lockDirectory, Hash(Path.GetFullPath(targetPath).ToUpperInvariant()) + ".lock");
+    var lockPath = Path.Combine(lockDirectory, CacheIdentity.Hash(Path.GetFullPath(targetPath).ToUpperInvariant()) + ".lock");
     var timer = System.Diagnostics.Stopwatch.StartNew();
     var timeout = TimeSpan.FromSeconds(30);
     while (timer.Elapsed < timeout)

@@ -1,3 +1,4 @@
+using static MutationFramework.EngineTests.TestWorkspace;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Security.Cryptography;
@@ -21,6 +22,7 @@ public sealed class LargeWorkloadBenchmarkTests
   [TestCase("a - (b - c)", "a - b - c", false)]
   [TestCase("(a + b) * c", "a + b * c", false)]
   [TestCase("\"a b\"", "\"ab\"", false)]
+  [Category("Unit")]
   public void ReplacementNormalizationRemovesOnlyStructurallyRedundantParentheses(
       string left, string right, bool equivalent)
   {
@@ -31,12 +33,14 @@ public sealed class LargeWorkloadBenchmarkTests
   [TestCase("ResourceGroupScheduling: split 20 batches into 80 process-isolated resource-group work units across 4 covered groups, bounded by 4 workers.", 5, 20, 4)]
   [TestCase("ResourceConstrainedConcurrency: reduced mutation workers from 5 to 2 because every batch shares a resource lock.", 5, 20, 2)]
   [TestCase("", 5, 20, 5)]
+  [Category("Unit")]
   public void EffectiveWorkerCountUsesTheSchedulerDiagnostic(string diagnostic, int requestedWorkers, int batches, int expected)
   {
     Assert.That(ResolveEffectiveWorkerCount([diagnostic], requestedWorkers, batches), Is.EqualTo(expected));
   }
 
   [Test, Explicit("Compares the current matched small-workload report with the pinned Stryker report.")]
+  [Category("Performance")]
   public void SmallWorkloadMatchesPinnedStrykerExecutableMutants()
   {
     var root = FindRepositoryRoot();
@@ -55,6 +59,7 @@ public sealed class LargeWorkloadBenchmarkTests
   }
 
   [Test, Explicit("Runs three matched 2,000-mutant SQLite workloads and records machine-specific measurements.")]
+  [Category("Performance")]
   public async Task LargeSqliteWorkloadIsMeasuredAcrossRepeatedRuns()
   {
     const int runCount = 3;
@@ -85,8 +90,8 @@ public sealed class LargeWorkloadBenchmarkTests
     var sqliteRoot = Path.Combine(benchmarkRoot, "sqlite");
     var cacheDirectory = Path.Combine(benchmarkRoot, "cache");
     Directory.CreateDirectory(sqliteRoot);
-    var previousSqliteRoot = Environment.GetEnvironmentVariable("MUTATION_LARGE_SQLITE_ROOT");
-    Environment.SetEnvironmentVariable("MUTATION_LARGE_SQLITE_ROOT", sqliteRoot);
+    var previousSqliteRoot = Environment.GetEnvironmentVariable("MUTAGEN_LARGE_SQLITE_ROOT");
+    Environment.SetEnvironmentVariable("MUTAGEN_LARGE_SQLITE_ROOT", sqliteRoot);
 
     var productionProject = Path.Combine(repositoryRoot, "benchmarks", "LargeIntegrationSample", "LargeIntegrationSample", "LargeIntegrationSample.csproj");
     var testProject = Path.Combine(repositoryRoot, "benchmarks", "LargeIntegrationSample", "LargeIntegrationSample.Tests", "LargeIntegrationSample.Tests.csproj");
@@ -251,7 +256,7 @@ public sealed class LargeWorkloadBenchmarkTests
     }
     finally
     {
-      Environment.SetEnvironmentVariable("MUTATION_LARGE_SQLITE_ROOT", previousSqliteRoot);
+      Environment.SetEnvironmentVariable("MUTAGEN_LARGE_SQLITE_ROOT", previousSqliteRoot);
     }
   }
 
@@ -484,17 +489,7 @@ public sealed class LargeWorkloadBenchmarkTests
     }
   }
 
-  private static string FindRepositoryRoot()
-  {
-    for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-    {
-      if (File.Exists(Path.Combine(directory.FullName, "MutationFramework.slnx")))
-      {
-        return directory.FullName;
-      }
-    }
-    throw new DirectoryNotFoundException("Unable to locate MutationFramework.slnx from the benchmark test output directory.");
-  }
+
 
   private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 

@@ -1,4 +1,11 @@
 <Solution>
+  <Folder Name="/Documentation/">
+    <File Path="README.md" />
+    <File Path="docs/architecture.md" />
+    <File Path="docs/benchmarks.md" />
+    <File Path="benchmarks/results/maintainability-refactoring-2026-11-17.json" />
+    <File Path="workflow/dev/maintainability-refactoring-2026-11-17.md" />
+  </Folder>
   <Project Path="src/MutationFramework.Cli/MutationFramework.Cli.csproj" />
   <Project Path="src/MutationFramework.CoverageCollector/MutationFramework.CoverageCollector.csproj" />
   <Project Path="src/MutationFramework.Mutators/MutationFramework.Mutators.csproj" />

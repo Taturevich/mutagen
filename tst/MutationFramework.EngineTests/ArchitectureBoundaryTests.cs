@@ -1,5 +1,8 @@
+using static MutationFramework.EngineTests.TestWorkspace;
 using System.Reflection;
 using System.Xml.Linq;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using MutationFramework.CoverageCollector;
 using MutationFramework.Sdk;
 using NUnit.Framework;
@@ -9,7 +12,23 @@ namespace MutationFramework.EngineTests;
 [TestFixture]
 public sealed class ArchitectureBoundaryTests
 {
+  [TestCase("Application/Engine.cs", "CSharpSyntaxTree,CSharpSyntaxRewriter,JsonSerializer,SHA256,TestPlatformSession,ProcessStartInfo,XDocument,SemaphoreSlim")]
+  [TestCase("Execution/MutationExecutor.cs", "CompilationWorkspace,ProjectEvaluation,CachedCompilationArtifacts,CachedMutationExecutionResult,VsTestConsoleWrapper,HashFileContent")]
+  [TestCase("Coverage/CoverageMap.cs", "MutationEngine,Engine,MutationExecutor,TestPlatformSession,TestHostIsolationPolicy,MutationExecutionMode")]
+  [TestCase("Reporting/MutationReportWriter.cs", "MutationExecutor,TestPlatformSession,CompilationWorkspace,ProjectEvaluation,RunMetrics,MutationPlanner,MutationOptions")]
+  [TestCase("Planning/ResourceAwareScheduler.cs", "TestPlatformSession,VsTestConsoleWrapper,TestCaseDescriptor,ProcessStartInfo")]
+  [Category("Component")]
+  public void InternalModulesKeepTheirResponsibilityBoundaries(string relativePath, string forbiddenNames)
+  {
+    var sourcePath = Path.Combine(FindRepositoryRoot(), "src", "MutationFramework.Cli", relativePath);
+    var identifiers = CSharpSyntaxTree.ParseText(File.ReadAllText(sourcePath)).GetRoot().DescendantNodes()
+        .OfType<IdentifierNameSyntax>().Select(identifier => identifier.Identifier.ValueText).ToHashSet(StringComparer.Ordinal);
+    Assert.That(identifiers.Intersect(forbiddenNames.Split(','), StringComparer.Ordinal), Is.Empty,
+        $"{relativePath} crossed an architectural boundary. Delegate to the owning component.");
+  }
+
   [Test]
+  [Category("Component")]
   public void MutatorsAndCoverageCollectorRemainIndependentOfEngineOrchestration()
   {
     var repositoryRoot = FindRepositoryRoot();
@@ -69,15 +88,5 @@ public sealed class ArchitectureBoundaryTests
       .Order(StringComparer.Ordinal)
       .ToArray();
 
-  private static string FindRepositoryRoot()
-  {
-    for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-    {
-      if (File.Exists(Path.Combine(directory.FullName, "MutationFramework.slnx")))
-      {
-        return directory.FullName;
-      }
-    }
-    throw new DirectoryNotFoundException("Unable to locate MutationFramework.slnx from the engine test output directory.");
-  }
+
 }

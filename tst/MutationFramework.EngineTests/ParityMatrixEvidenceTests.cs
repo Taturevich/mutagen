@@ -1,3 +1,4 @@
+using static MutationFramework.EngineTests.TestWorkspace;
 using System.Reflection;
 using System.Text.Json;
 using Microsoft.CodeAnalysis.CSharp;
@@ -71,6 +72,7 @@ public sealed class ParityMatrixEvidenceTests
       };
 
   [Test]
+  [Category("Component")]
   public void EveryPinnedTransformationHasAConsistentStatusAndConformanceSuite()
   {
     var root = FindRepositoryRoot();
@@ -103,19 +105,19 @@ public sealed class ParityMatrixEvidenceTests
     Assert.That(categories.Where(category => category.StartsWith("Regex / ", StringComparison.Ordinal)),
         Is.Not.Empty, "The pinned matrix must retain the documented regex categories.");
 
-    var testType = typeof(MutationEngineIntegrationTests);
+    var testTypes = typeof(ParityMatrixEvidenceTests).Assembly.GetTypes();
     var referencedSuites = MutationConformanceSuites.Values.SelectMany(suites => suites)
         .Concat(RegexConformanceSuites).Distinct(StringComparer.Ordinal).ToArray();
-    var integrationSourcePath = Path.Combine(root, "tst", "MutationFramework.EngineTests", "MutationEngineIntegrationTests.cs");
-    var integrationSource = CSharpSyntaxTree.ParseText(File.ReadAllText(integrationSourcePath), path: integrationSourcePath)
-        .GetRoot();
+    var integrationSource = Directory.GetFiles(Path.Combine(root, "tst", "MutationFramework.EngineTests"), "*Tests.cs")
+        .SelectMany(path => CSharpSyntaxTree.ParseText(File.ReadAllText(path), path: path).GetRoot()
+            .DescendantNodes().OfType<MethodDeclarationSyntax>()).ToArray();
     foreach (var suiteName in referencedSuites)
     {
-      var suite = testType.GetMethod(suiteName, BindingFlags.Instance | BindingFlags.Public);
+      var suite = testTypes.Select(type => type.GetMethod(suiteName, BindingFlags.Instance | BindingFlags.Public)).SingleOrDefault(method => method is not null);
       Assert.That(suite, Is.Not.Null, $"Conformance suite '{suiteName}' was renamed or removed.");
       Assert.That(suite!.GetCustomAttribute<TestAttribute>(), Is.Not.Null,
           $"Conformance suite '{suiteName}' is no longer an NUnit test.");
-      var declaration = integrationSource.DescendantNodes().OfType<MethodDeclarationSyntax>()
+      var declaration = integrationSource
           .SingleOrDefault(method => method.Identifier.ValueText == suiteName);
       Assert.That(declaration, Is.Not.Null, $"Conformance suite '{suiteName}' has no source declaration.");
       Assert.That(declaration!.ToFullString(), Does.Contain("stryker-net-5.0.0-parity.json"),
@@ -127,7 +129,7 @@ public sealed class ParityMatrixEvidenceTests
       var categoryEvidence = category.StartsWith("Regex / ", StringComparison.Ordinal) ? "Regex /" : category;
       foreach (var suiteName in suites)
       {
-        var declaration = integrationSource.DescendantNodes().OfType<MethodDeclarationSyntax>()
+        var declaration = integrationSource
             .Single(method => method.Identifier.ValueText == suiteName);
         Assert.That(declaration.ToFullString(), Does.Contain(categoryEvidence),
             $"Conformance suite '{suiteName}' no longer exercises documented category '{category}'.");
@@ -135,19 +137,5 @@ public sealed class ParityMatrixEvidenceTests
     }
   }
 
-  private static string FindRepositoryRoot()
-  {
-    var current = new DirectoryInfo(AppContext.BaseDirectory);
-    while (current is not null)
-    {
-      if (File.Exists(Path.Combine(current.FullName, "MutationFramework.slnx")))
-      {
-        return current.FullName;
-      }
 
-      current = current.Parent;
-    }
-
-    throw new DirectoryNotFoundException("Unable to locate MutationFramework.slnx from the test output directory.");
-  }
 }
