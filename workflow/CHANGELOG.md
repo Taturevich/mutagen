@@ -311,3 +311,4 @@
 - Scoped SQLite lock discovery to its two intended test cases after the new bailout fixture expanded the shared test assembly. The focused lock E2E and complete solution suite passed (309 tests total); the correction was pushed as `1d49f57`.
 - Added regressions proving random `codex-arg0...` PATH wrapper names do not defeat cache reuse while real PATH changes remain part of the fingerprint, and current-culture changes invalidate execution fingerprints. All 11 environment-fingerprint tests pass.
 - Included OS/architecture, local time zone, and current thread cultures in the execution fingerprint, since the same compiled test assemblies may produce different outcomes under those process settings.
+- The final full solution run passed 318 tests (95 engine, 101 scale, 100 large-integration, 18 sample, and four isolation tests). The solution build completed with zero warnings/errors, formatting verification and `git diff --check` passed.
