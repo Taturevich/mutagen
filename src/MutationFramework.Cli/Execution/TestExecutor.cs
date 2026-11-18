@@ -1,21 +1,25 @@
 using System.Diagnostics;
+
 using Microsoft.CodeAnalysis;
 
 namespace MutationFramework.Sdk;
 
 internal sealed record TestRun(string Name, TestFailureKind FailureKind, long DurationMs, string? Error)
 {
+  public bool ExecutionObserved { get; init; } = true;
   public bool Passed => FailureKind == TestFailureKind.None;
   public bool Skipped => FailureKind is TestFailureKind.Skipped or TestFailureKind.Bailed;
   public string ProbePath { get; init; } = "";
   public string[] CoveredRuntimeSiteIds { get; init; } = [];
-  public string? CoverageError { get; init; }
+  public string? CoverageError
+  {
+    get; init;
+  }
 }
-
 
 internal static class TestExecutor
 {
-  internal static async Task<TestRun> ExecuteTest(TestCaseDescriptor test, string session, MutationOptions opt, string? active, TestPlatformSession platform, ResourceLockManager locks, RunMetrics metrics, CancellationToken ct)
+  internal static async Task<TestRun> ExecuteTest(TestCaseDescriptor test, string session, MutationOptions opt, string? active, TestPlatformSession platform, ResourceLockManager locks, RunMetrics metrics, CancellationToken ct, string? expectedActiveSite = null)
   {
     string? probe = null;
     if (active is null)
@@ -28,23 +32,28 @@ internal static class TestExecutor
     var timer = Stopwatch.StartNew();
     var resourceLocks = opt.ResourceLocksByTestId.GetValueOrDefault(test.Id, []);
     var result = await locks.ExecuteAsync(resourceLocks,
-        () => Task.Run(() => platform.Execute(test, probe, active, opt.TimeoutSeconds, () => metrics.StartedTestHost(), ct), CancellationToken.None), ct);
+        () => Task.Run(() => platform.Execute(test, probe, active, opt.TimeoutSeconds, () => metrics.StartedTestHost(), ct, expectedActiveSite), CancellationToken.None), ct);
     timer.Stop();
-    return new(test.DisplayName, result.FailureKind, timer.ElapsedMilliseconds, result.Error) { ProbePath = probe ?? string.Empty };
+    return new(test.DisplayName, result.FailureKind, timer.ElapsedMilliseconds, result.Error)
+    {
+      ExecutionObserved = result.ExecutionObserved,
+      ProbePath = probe ?? string.Empty
+    };
   }
 
   internal static async Task<IReadOnlyList<TestRun>> ExecuteTestsInSharedMutationHost(TestCaseDescriptor[] tests,
       MutationOptions options, string active, TestPlatformSession platform, RunMetrics metrics, CancellationToken cancellationToken,
-      bool serializeTests = false, bool stopAfterAttributableFailure = false)
+      bool serializeTests = false, bool stopAfterAttributableFailure = false,
+      IReadOnlyDictionary<string, string>? expectedSites = null)
   {
     var totalTimeout = (int)Math.Min(int.MaxValue / 1000L, (long)options.TimeoutSeconds * tests.Length);
     var results = await Task.Run(() => platform.ExecuteMany(tests, null, active, totalTimeout,
-        () => metrics.StartedTestHost(), cancellationToken, serializeTests,
-        stopAfterAttributableFailure: stopAfterAttributableFailure), CancellationToken.None);
+        () => metrics.StartedTestHost(), cancellationToken, serializeTests: true, capturePerTestCoverage: true,
+        stopAfterAttributableFailure: stopAfterAttributableFailure, expectedSites: expectedSites), CancellationToken.None);
     return tests.Select(test =>
     {
       var result = results[test.Id];
-      return new TestRun(test.DisplayName, result.FailureKind, result.DurationMs, result.Error);
+      return new TestRun(test.DisplayName, result.FailureKind, result.DurationMs, result.Error) { ExecutionObserved = result.ExecutionObserved };
     }).ToArray();
   }
 
@@ -84,9 +93,10 @@ internal static class TestExecutor
         resolveCandidate(mutantId).MutantRuntimeId).Order(StringComparer.Ordinal));
     var locks = batch.TestIds.SelectMany(testId => opt.ResourceLocksByTestId.GetValueOrDefault(testId, []))
         .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
-    Interlocked.Add(ref metrics.MutationTests, batchTests.Length);
     var mixedRuns = await resourceLockManager.ExecuteAsync(locks,
-        () => TestExecutor.ExecuteTestsInSharedMutationHost(batchTests, opt, activeMutationIds, platform, metrics, ct, serializeTests: true), ct);
+        () => TestExecutor.ExecuteTestsInSharedMutationHost(batchTests, opt, activeMutationIds, platform, metrics, ct, serializeTests: true,
+            expectedSites: batch.TestToMutantId.ToDictionary(pair => pair.Key, pair => resolveCandidate(pair.Value).SiteRuntimeId)), ct);
+    Interlocked.Add(ref metrics.MutationTests, mixedRuns.Count(run => run.ExecutionObserved));
     var runsByTestId = batchTests.Zip(mixedRuns).ToDictionary(pair => pair.First.Id, pair => pair.Second, StringComparer.Ordinal);
     var results = new List<MutationResult>(batch.MutantIds.Count);
     foreach (var mutantId in batch.MutantIds)
@@ -109,16 +119,20 @@ internal static class TestExecutor
     var metrics = context.Metrics;
     var resourceLockManager = context.ResourceLocks;
     var session = context.SessionDirectory;
-    var kill = new List<string>(); long duration = 0; var status = MutationStatus.Survived; string? error = null;
+    var kill = new List<string>();
+    long duration = 0;
+    var status = MutationStatus.Survived;
+    string? error = null;
     if (sharedHost)
     {
       var resourceLocks = relevant.SelectMany(testCase => opt.ResourceLocksByTestId.GetValueOrDefault(testCase.Id, []))
           .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
       var runs = await resourceLockManager.ExecuteAsync(resourceLocks,
           () => TestExecutor.ExecuteTestsInSharedMutationHost(relevant, opt, candidate.MutantRuntimeId, platform, metrics, ct,
-              serializeTests: resourceLocks.Length != 0, stopAfterAttributableFailure: true), ct);
+              serializeTests: true, stopAfterAttributableFailure: true,
+              expectedSites: relevant.ToDictionary(test => test.Id, _ => candidate.SiteRuntimeId)), ct);
       Interlocked.Add(ref metrics.MutationTests,
-          runs.Count(run => run.FailureKind != TestFailureKind.Bailed));
+          runs.Count(run => run.ExecutionObserved));
       var outcome = MutationOutcomeClassifier.ClassifyMutant(runs);
       duration = outcome.DurationMs;
       status = outcome.Status;
@@ -129,14 +143,37 @@ internal static class TestExecutor
     {
       foreach (var testCase in relevant)
       {
-        Interlocked.Increment(ref metrics.MutationTests);
-        var run = await TestExecutor.ExecuteTest(testCase, session, opt, candidate.MutantRuntimeId, platform, resourceLockManager, metrics, ct); duration += run.DurationMs;
-        if (run.Skipped) { status = MutationStatus.Inconclusive; error = "Selected test was skipped."; break; }
+        var run = await TestExecutor.ExecuteTest(testCase, session, opt, candidate.MutantRuntimeId, platform, resourceLockManager, metrics, ct, candidate.SiteRuntimeId);
+        if (run.ExecutionObserved)
+        {
+          Interlocked.Increment(ref metrics.MutationTests);
+        }
+
+        duration += run.DurationMs;
+        if (run.Skipped)
+        {
+          status = MutationStatus.Inconclusive;
+          error = "Selected test was skipped.";
+          break;
+        }
         if (!run.Passed)
         {
-          if (run.FailureKind == TestFailureKind.TestBody) { status = MutationStatus.Killed; error = run.Error; kill.Add(testCase.DisplayName); break; }
-          if (run.FailureKind == TestFailureKind.Unattributed) { status = MutationStatus.Inconclusive; error = run.Error; break; }
-          status = run.FailureKind == TestFailureKind.Timeout ? MutationStatus.Timeout : MutationStatus.InfrastructureError; error = run.Error; break;
+          if (run.FailureKind == TestFailureKind.TestBody)
+          {
+            status = MutationStatus.Killed;
+            error = run.Error;
+            kill.Add(testCase.DisplayName);
+            break;
+          }
+          if (run.FailureKind == TestFailureKind.Unattributed)
+          {
+            status = MutationStatus.Inconclusive;
+            error = run.Error;
+            break;
+          }
+          status = run.FailureKind == TestFailureKind.Timeout ? MutationStatus.Timeout : MutationStatus.InfrastructureError;
+          error = run.Error;
+          break;
         }
       }
     }

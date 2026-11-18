@@ -1,9 +1,12 @@
-using MutationFramework.Sdk;
-using NUnit.Framework;
+using System.Text.Json;
+
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using System.Text.Json;
+
+using MutationFramework.Sdk;
+
+using NUnit.Framework;
 
 namespace MutationFramework.EngineTests;
 
@@ -244,7 +247,16 @@ public sealed class StatementConformanceTests
             : candidate.Original.Contains("stackalloc", StringComparison.Ordinal) ? fixture.GetMethod("StackArray")!.Invoke(null, null)
             : fixture.GetMethod("Collection")!.Invoke(null, null);
         Assert.That(result, Is.Not.Null);
-        Assert.That(result switch { int[] array => array.Length, List<int> list => list.Count, System.Collections.ObjectModel.Collection<int> collection => collection.Count, Dictionary<int, int> dictionary => dictionary.Count, int value => value, object item => string.IsNullOrEmpty((string?)item.GetType().GetProperty("Foo")!.GetValue(item)) ? 0 : 1, null => -1 }, Is.Zero,
+        Assert.That(result switch
+        {
+          int[] array => array.Length,
+          List<int> list => list.Count,
+          System.Collections.ObjectModel.Collection<int> collection => collection.Count,
+          Dictionary<int, int> dictionary => dictionary.Count,
+          int value => value,
+          object item => string.IsNullOrEmpty((string?)item.GetType().GetProperty("Foo")!.GetValue(item)) ? 0 : 1,
+          null => -1
+        }, Is.Zero,
             $"Initializer mutant did not activate: {candidate.Original} -> {candidate.Replacement}");
       }
 
@@ -499,5 +511,4 @@ public sealed class StatementConformanceTests
       }
     }
   }
-
 }

@@ -26,14 +26,18 @@ internal static class MutationResultAggregator
     var metrics = statistics.Metrics;
     var output = Path.GetFullPath(opt.OutputDirectory);
     var ordered = completed.OrderBy(x => x.SourceFile, StringComparer.Ordinal).ThenBy(x => x.Line).ThenBy(x => x.Column).ThenBy(x => x.Id, StringComparer.Ordinal).ToArray();
-    var killed = ordered.Count(x => x.Status == MutationStatus.Killed); var survived = ordered.Count(x => x.Status == MutationStatus.Survived); var denominator = killed + survived;
+    var killed = ordered.Count(x => x.Status == MutationStatus.Killed);
+    var survived = ordered.Count(x => x.Status == MutationStatus.Survived);
+    var denominator = killed + survived;
     var uncovered = ordered.Count(x => x.Status == MutationStatus.NoCoverage);
     var busyMs = workerBusy.Sum();
     var coveredCount = workItems.Count;
     var counters = new ExecutionCounters(ordered.Length, coveredCount, uncovered, testCases.Length, metrics.BaselineTests, metrics.MutationTests, metrics.TestRunnerStarts, metrics.DiscoveryOperations, metrics.BuildInvocations, metrics.WorkerRestarts,
         metrics.WorkerFailures, executionPlan.Batches.Count, executionPlan.Statistics.AverageMutantsPerBatch, busyMs,
         Math.Max(0, executionMs * workerBusy.Length - busyMs))
-    { TestHostProcessStarts = metrics.TestHostStarts };
+    {
+      TestHostProcessStarts = metrics.TestHostStarts
+    };
     var overallStatus = !executeMutants ? "Planned" : runCanceled ? "Canceled" : ordered.Any(x => x.Status is MutationStatus.InfrastructureError or MutationStatus.Timeout or MutationStatus.Inconclusive or MutationStatus.CompileError) ? "CompletedWithErrors" : "Completed";
     var result = new MutationRunResult(overallStatus, ordered, killed, survived, uncovered, denominator == 0 ? null : (double)killed * 100 / denominator, timings, statistics.DurationMs, testToSites, diagnostics, Path.Combine(output, "mutation-report.json"), Path.Combine(output, "index.html"))
     {
@@ -62,7 +66,7 @@ internal static class MutationResultAggregator
           TestHostIsolationPolicy = effectiveIsolationPolicy,
           TimeoutPolicy = timeoutPolicy,
           TestsSerializedInSharedHost = opt.TestHostIsolationPolicy is TestHostIsolationPolicy.PerBatch or TestHostIsolationPolicy.PerResourceGroup ||
-              effectiveIsolationPolicy == TestHostIsolationPolicy.PerMutant && opt.ResourceLocksByTestId.ContainsKey(testCase.Id),
+              effectiveIsolationPolicy is TestHostIsolationPolicy.PerMutant or TestHostIsolationPolicy.Mixed,
           ResourceIsolationGroup = resourceGroupsByTestId.GetValueOrDefault(testCase.Id)?.Id
         };
       }).ToArray(),

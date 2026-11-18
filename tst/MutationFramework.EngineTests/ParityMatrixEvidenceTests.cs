@@ -1,9 +1,12 @@
-using static MutationFramework.EngineTests.TestWorkspace;
 using System.Reflection;
 using System.Text.Json;
+
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+
 using NUnit.Framework;
+
+using static MutationFramework.EngineTests.TestWorkspace;
 
 namespace MutationFramework.EngineTests;
 
@@ -136,6 +139,4 @@ public sealed class ParityMatrixEvidenceTests
       }
     }
   }
-
-
 }

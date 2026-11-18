@@ -1,5 +1,6 @@
-using System.Reflection;
 using System.Collections.Concurrent;
+using System.Reflection;
+
 using Microsoft.VisualStudio.TestPlatform.ObjectModel.DataCollection;
 using Microsoft.VisualStudio.TestPlatform.ObjectModel.DataCollector.InProcDataCollector;
 using Microsoft.VisualStudio.TestPlatform.ObjectModel.InProcDataCollector;
@@ -30,8 +31,12 @@ public sealed class MutationCoverageCollector : InProcDataCollection
     }
   }
 
-  public void TestSessionStart(TestSessionStartArgs testSessionStartArgs) { }
-  public void TestCaseStart(TestCaseStartArgs testCaseStartArgs) { }
+  public void TestSessionStart(TestSessionStartArgs testSessionStartArgs)
+  {
+  }
+  public void TestCaseStart(TestCaseStartArgs testCaseStartArgs)
+  {
+  }
   public void TestSessionEnd(TestSessionEndArgs testSessionEndArgs)
   {
     if (_testDomain is not null)

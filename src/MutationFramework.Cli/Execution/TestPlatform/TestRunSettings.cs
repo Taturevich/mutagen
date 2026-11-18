@@ -43,5 +43,4 @@ internal static class TestRunSettings
 
     return new XDocument(new XElement("RunSettings", sections)).ToString(SaveOptions.DisableFormatting);
   }
-
 }

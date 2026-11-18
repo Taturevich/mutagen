@@ -8,9 +8,14 @@ internal abstract class MethodNameMutator(string id, MutationCategory category, 
     Func<IMethodSymbol, bool> methodFilter) : IMutator<InvocationExpressionSyntax>
 {
   private readonly Dictionary<string, string[]> _replacements = replacements.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
-  public MutatorMetadata Metadata { get; } = new(id, 1, category,
+  public MutatorMetadata Metadata
+  {
+    get;
+  } = new(id, 1, category,
       new HashSet<string>(replacements.Keys, StringComparer.Ordinal))
-  { Categories = new HashSet<MutationCategory>([category]) };
+  {
+    Categories = new HashSet<MutationCategory>([category])
+  };
 
   public IEnumerable<MutationDescription> Generate(InvocationExpressionSyntax node, SemanticModel model,
       Func<ExpressionSyntax, SemanticModel, (bool Supported, string? Reason)> validate)
@@ -42,7 +47,6 @@ internal abstract class MethodNameMutator(string id, MutationCategory category, 
   }
 }
 
-
 internal sealed class StringMethodMutator() : MethodNameMutator("string-methods", MutationCategory.StringMethods,
     new Dictionary<string, string[]>
     {
@@ -59,8 +63,8 @@ internal sealed class StringMethodMutator() : MethodNameMutator("string-methods"
       ["TrimStart"] = ["TrimEnd"],
       ["TrimEnd"] = ["TrimStart"]
     }, method => method.ContainingType.SpecialType == SpecialType.System_String)
-{ }
-
+{
+}
 
 internal sealed class LinqMethodMutator() : MethodNameMutator("linq-methods", MutationCategory.Linq,
     new Dictionary<string, string[]>
@@ -101,8 +105,8 @@ internal sealed class LinqMethodMutator() : MethodNameMutator("linq-methods", Mu
       ["ThenByDescending"] = ["ThenBy"]
     }, method => method.ContainingNamespace.ToDisplayString().StartsWith("System.Linq", StringComparison.Ordinal) ||
         method.Name is "Max" or "Min" && method.ContainingType.ToDisplayString() == "System.MemoryExtensions")
-{ }
-
+{
+}
 
 internal sealed class MathMethodMutator() : MethodNameMutator("math-methods", MutationCategory.Math,
     new Dictionary<string, string[]>
@@ -131,4 +135,5 @@ internal sealed class MathMethodMutator() : MethodNameMutator("math-methods", Mu
       ["ReciprocalEstimate"] = ["ReciprocalSqrtEstimate"],
       ["ReciprocalSqrtEstimate"] = ["ReciprocalEstimate", "Sqrt"]
     }, method => method.ContainingType.ToDisplayString() is "System.Math" or "System.MathF")
-{ }
+{
+}

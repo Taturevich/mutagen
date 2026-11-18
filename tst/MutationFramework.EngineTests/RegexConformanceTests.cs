@@ -1,9 +1,12 @@
-using MutationFramework.Sdk;
-using NUnit.Framework;
+using System.Text.Json;
+
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using System.Text.Json;
+
+using MutationFramework.Sdk;
+
+using NUnit.Framework;
 
 namespace MutationFramework.EngineTests;
 
@@ -222,5 +225,4 @@ public sealed class RegexConformanceTests
       }
     }
   }
-
 }

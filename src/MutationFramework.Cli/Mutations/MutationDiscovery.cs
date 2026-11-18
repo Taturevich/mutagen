@@ -6,18 +6,25 @@ namespace MutationFramework.Sdk;
 
 internal sealed record CandidateDiscoveryArtifact(Candidate[] Candidates, MutationResult[] UnsupportedMutations, string[] Diagnostics);
 
-
 internal sealed record Candidate(string Id, string SiteId, string Operator, string File, int Start, int Length, int Line, int Column, string Original, string Replacement, string ReplacementToken, string SiteRuntimeId, string MutantRuntimeId, string? ResultType = null, MutationApplicationKind ApplicationKind = MutationApplicationKind.BuiltIn)
 {
-  public bool UseInlineSiteProbe { get; init; }
+  public bool UseInlineSiteProbe
+  {
+    get; init;
+  }
+  public string? OwnerProject
+  {
+    get; init;
+  }
 }
-
 
 internal static class MutationDiscovery
 {
   internal static async Task<List<Candidate>> DiscoverCandidatesCached(string[] files, string project, MutationOptions options, List<string> diagnostics,
-      CancellationToken cancellationToken, List<MutationResult> unsupportedMutations, ProjectEvaluation evaluation, ArtifactCache cache)
+      CancellationToken cancellationToken, List<MutationResult> unsupportedMutations, ProjectEvaluation evaluation, ArtifactCache cache,
+      IReadOnlyList<ProjectSemanticCompilation>? projectCompilations = null, RunMetrics? metrics = null)
   {
+    var semanticCompilations = projectCompilations ?? await ProjectSemanticCompilations.LoadAsync(project, evaluation, cache, diagnostics, cancellationToken, metrics);
     var projectIdentity = Path.GetFullPath(project) + "|" + evaluation.TargetFramework;
     var configurationInputs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     string? unresolvedImport = null;
@@ -29,7 +36,7 @@ internal static class MutationDiscovery
     var cacheInputs = files.Concat(configurationInputs).Distinct(StringComparer.OrdinalIgnoreCase);
     var values = new List<string>
     {
-      "mutation-discovery-v1", projectIdentity, evaluation.AssemblyName, evaluation.ParseOptions.LanguageVersion.ToString(),
+      "mutation-discovery-v2", string.Join(";", semanticCompilations.Select(compilation => compilation.Fingerprint)), projectIdentity, evaluation.AssemblyName, evaluation.ParseOptions.LanguageVersion.ToString(),
       string.Join(";", evaluation.ParseOptions.PreprocessorSymbolNames.Order(StringComparer.Ordinal)),
       string.Join(";", evaluation.AssemblyNamesByFile.OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase).Select(pair => pair.Key + "=" + pair.Value)),
       string.Join(";", evaluation.ParseOptionsByFile.OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
@@ -59,8 +66,12 @@ internal static class MutationDiscovery
     }
     var localDiagnostics = new List<string>();
     var localUnsupported = new List<MutationResult>();
+    var productionOwners = evaluation.SourceOwnership.Select(owner => owner.Project).Append(Path.GetFullPath(project)).ToHashSet(StringComparer.OrdinalIgnoreCase);
     var candidates = DiscoverCandidates(files, project, options, localDiagnostics, cancellationToken, localUnsupported,
-        MutationCompilationContext.From(evaluation));
+        MutationCompilationContext.From(evaluation) with
+        {
+          ProjectCompilations = semanticCompilations.Where(owner => productionOwners.Contains(owner.Project)).ToArray()
+        });
     diagnostics.AddRange(localDiagnostics);
     unsupportedMutations.AddRange(localUnsupported);
     if (unresolvedImport is null)
@@ -74,30 +85,41 @@ internal static class MutationDiscovery
   internal static List<Candidate> DiscoverCandidates(string[] files, string project, MutationOptions opt, List<string> diagnostics,
       CancellationToken ct, List<MutationResult>? unsupportedMutations = null, MutationCompilationContext? context = null)
   {
-    var list = new List<Candidate>(); var root = Path.GetDirectoryName(Path.GetFullPath(project))!;
+    var list = new List<Candidate>();
+    var root = Path.GetDirectoryName(Path.GetFullPath(project))!;
     var parseOptions = context?.ParseOptions ?? new CSharpParseOptions(LanguageVersion.Preview);
-    var sourceByFile = files.ToDictionary(file => file, File.ReadAllText, StringComparer.OrdinalIgnoreCase);
-    var trees = files
-        .Select(f => (File: f, Tree: CSharpSyntaxTree.ParseText(sourceByFile[f], path: f,
-            options: context?.ParseOptionsByFile?.GetValueOrDefault(f) ?? parseOptions))).ToList();
     var targetFramework = context?.TargetFramework ?? opt.TargetFramework ?? "net11.0";
     var assemblyIdentity = context?.AssemblyIdentity ?? Path.GetFileNameWithoutExtension(project);
-    var globalUsings = Path.Combine(root, "obj", "Debug", targetFramework, Path.GetFileNameWithoutExtension(project) + ".GlobalUsings.g.cs");
-    if (File.Exists(globalUsings))
+    var inputs = new List<(string File, SyntaxTree Tree, CSharpCompilation Compilation, string Assembly, string Framework, string? Owner)>();
+    if (context?.ProjectCompilations.Count > 0)
     {
-      trees.Add((globalUsings, CSharpSyntaxTree.ParseText(File.ReadAllText(globalUsings), path: globalUsings, options: parseOptions)));
+      var requested = files.ToHashSet(StringComparer.OrdinalIgnoreCase);
+      foreach (var owner in context.ProjectCompilations)
+      {
+        foreach (var tree in owner.Compilation.SyntaxTrees.Where(tree => requested.Contains(tree.FilePath)))
+        {
+          inputs.Add((tree.FilePath, tree, owner.Compilation, owner.Compilation.AssemblyName!, owner.TargetFramework, owner.Project));
+        }
+      }
     }
-
-    var referencePaths = ((string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES"))?.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries) ?? [];
-    var references = referencePaths.Distinct(StringComparer.OrdinalIgnoreCase).Select(path => MetadataReference.CreateFromFile(path)).ToArray();
-    var compilation = CSharpCompilation.Create("MutagenSemanticValidation", trees.Select(x => x.Tree), references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
-    var treeByFile = trees.ToDictionary(x => x.File, x => x.Tree, StringComparer.OrdinalIgnoreCase);
-    var registry = opt.Registry ?? MutatorRegistry.CreateDefault(opt.Mutators);
-    foreach (var file in files)
+    else
     {
-      ct.ThrowIfCancellationRequested(); var rel = Path.GetRelativePath(root, file).Replace('\\', '/');
-      var fileAssemblyIdentity = context?.AssemblyNamesByFile?.GetValueOrDefault(file) ?? assemblyIdentity;
-      if (IsGeneratedSource(file, sourceByFile[file]))
+      // The synchronous syntax-fixture API supplies its own in-memory compilation context.
+      // Production discovery always enters through the evaluated compiler invocations above.
+      var trees = files.Select(file => CSharpSyntaxTree.ParseText(File.ReadAllText(file), path: file,
+          options: context?.ParseOptionsByFile?.GetValueOrDefault(file) ?? parseOptions)).ToArray();
+      var references = (((string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES"))?.Split(Path.PathSeparator,
+          StringSplitOptions.RemoveEmptyEntries) ?? []).Distinct(StringComparer.OrdinalIgnoreCase).Select(path => MetadataReference.CreateFromFile(path));
+      var fixtureCompilation = CSharpCompilation.Create(assemblyIdentity, trees, references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+      inputs.AddRange(trees.Select(tree => (tree.FilePath, (SyntaxTree)tree, fixtureCompilation,
+          context?.AssemblyNamesByFile?.GetValueOrDefault(tree.FilePath) ?? assemblyIdentity, targetFramework, (string?)null)));
+    }
+    var registry = opt.Registry ?? MutatorRegistry.CreateDefault(opt.Mutators);
+    foreach (var (file, tree, compilation, fileAssemblyIdentity, fileFramework, ownerProject) in inputs)
+    {
+      ct.ThrowIfCancellationRequested();
+      var rel = Path.GetRelativePath(root, file).Replace('\\', '/');
+      if (IsGeneratedSource(file, tree.GetText(ct).ToString()))
       {
         continue;
       }
@@ -107,13 +129,13 @@ internal static class MutationDiscovery
         continue;
       }
 
-      var tree = treeByFile[file]; var model = compilation.GetSemanticModel(tree, ignoreAccessibility: true);
+      var model = compilation.GetSemanticModel(tree, ignoreAccessibility: true);
       foreach (var node in tree.GetRoot().DescendantNodes())
       {
         foreach (var description in registry.Generate(node, model, IsSupportedMutationSite))
         {
           var target = description.Node;
-          var identityPrefix = fileAssemblyIdentity + "|" + targetFramework + "|" + rel + "|" + target.SpanStart + "|";
+          var identityPrefix = fileAssemblyIdentity + "|" + fileFramework + "|" + rel + "|" + target.SpanStart + "|";
           var id = CacheIdentity.Hash(identityPrefix + description.ReplacementToken);
           var site = CacheIdentity.Hash(identityPrefix + target.Span.Length);
           var line = tree.GetLineSpan(target.Span).StartLinePosition;
@@ -132,6 +154,7 @@ internal static class MutationDiscovery
                   ? (model.GetTypeInfo(expression).ConvertedType ?? model.GetTypeInfo(expression).Type)?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
                   : null, description.ApplicationKind)
           {
+            OwnerProject = ownerProject,
             UseInlineSiteProbe = target is ExpressionSyntax candidateExpression &&
                 (HasExplicitOverflowContext(candidateExpression) || IsExpressionTreeContext(candidateExpression, model) ||
                     model.GetTypeInfo(candidateExpression).Type?.IsRefLikeType == true ||
@@ -142,7 +165,7 @@ internal static class MutationDiscovery
         }
       }
     }
-    var unique = list.GroupBy(x => (x.File, x.Start, x.Length, x.ReplacementToken)).Select(x => x.First()).OrderBy(x => x.File, StringComparer.Ordinal).ThenBy(x => x.Start).ThenBy(x => x.Id, StringComparer.Ordinal).ToList();
+    var unique = list.GroupBy(x => (x.OwnerProject, x.File, x.Start, x.Length, x.ReplacementToken)).Select(x => x.First()).OrderBy(x => x.File, StringComparer.Ordinal).ThenBy(x => x.Start).ThenBy(x => x.Id, StringComparer.Ordinal).ToList();
     ReindexCandidates(unique);
     return unique;
   }
@@ -154,6 +177,11 @@ internal static class MutationDiscovery
         "Expression replacement schema requires an expression syntax node.",
     MutationApplicationKind.StatementReplacement when description.Node is not StatementSyntax =>
         "Statement replacement schema requires a statement syntax node.",
+    MutationApplicationKind.StatementReplacement when description.Node is LocalDeclarationStatementSyntax or LocalFunctionStatementSyntax or LabeledStatementSyntax =>
+        "Statement dispatch cannot preserve the declaration scope, label visibility, or disposal lifetime of this statement.",
+    MutationApplicationKind.StatementReplacement when description.Node.DescendantNodes(node => node is not BlockSyntax)
+        .Any(node => node is SingleVariableDesignationSyntax) =>
+        "Statement dispatch cannot preserve the enclosing scope of an out-variable or pattern declaration.",
     MutationApplicationKind.ExpressionReplacement or MutationApplicationKind.StatementReplacement => null,
     _ => $"Unknown mutation application schema '{description.ApplicationKind}'."
   };
@@ -182,10 +210,15 @@ internal static class MutationDiscovery
         model.GetTypeInfo(arrayType).Type is IArrayTypeSymbol;
     if (expression is BinaryExpressionSyntax binary && binary.IsKind(SyntaxKind.AddExpression) &&
         (model.GetTypeInfo(binary.Left).Type?.SpecialType == SpecialType.System_String || model.GetTypeInfo(binary.Right).Type?.SpecialType == SpecialType.System_String))
-    { return (false, "string concatenation is excluded"); }
+    {
+      return (false, "string concatenation is excluded");
+    }
     foreach (var syntax in expression.DescendantNodesAndSelf())
     {
-      if (syntax is AwaitExpressionSyntax) { return (false, "await expressions cannot be wrapped without changing async semantics"); }
+      if (syntax is AwaitExpressionSyntax)
+      {
+        return (false, "await expressions cannot be wrapped without changing async semantics");
+      }
       if (syntax is not ExpressionSyntax current)
       {
         continue;
@@ -194,21 +227,31 @@ internal static class MutationDiscovery
       var type = model.GetTypeInfo(current).Type;
       var isArrayInitializer = syntax is InitializerExpressionSyntax initializer && initializer.IsKind(SyntaxKind.ArrayInitializerExpression);
       if (type?.TypeKind == TypeKind.Error && !(contextualArrayInitializer && isArrayInitializer))
-      { return (false, "dynamic or unresolved operand type"); }
+      {
+        return (false, "dynamic or unresolved operand type");
+      }
       var stackAllocation = expression is StackAllocArrayCreationExpressionSyntax;
       if (type?.IsRefLikeType == true && !stackAllocation ||
           type?.TypeKind == TypeKind.Pointer && !stackAllocation || type is ITypeParameterSymbol)
-      { return (false, $"ref-like, pointer, or generic operand type '{type?.ToDisplayString()}' in '{current}'"); }
+      {
+        return (false, $"ref-like, pointer, or generic operand type '{type?.ToDisplayString()}' in '{current}'");
+      }
       if (current is IdentifierNameSyntax identifier && model.GetSymbolInfo(identifier).Symbol is ILocalSymbol local && (local.RefKind != RefKind.None || local.Type.IsRefLikeType))
-      { return (false, "ref or ref-like local capture"); }
+      {
+        return (false, "ref or ref-like local capture");
+      }
     }
     if (expression.Ancestors().Any(x => x is AttributeArgumentSyntax or CaseSwitchLabelSyntax or ConstantPatternSyntax) ||
         expression.Ancestors().OfType<ParameterSyntax>().Any(p => p.Default?.Value == expression) ||
         expression.Ancestors().OfType<VariableDeclaratorSyntax>().Any(v => v.Initializer?.Value == expression && v.Parent?.Parent is FieldDeclarationSyntax field && field.Modifiers.Any(SyntaxKind.ConstKeyword)) ||
         expression.Ancestors().OfType<LocalDeclarationStatementSyntax>().Any(d => d.Modifiers.Any(SyntaxKind.ConstKeyword) && d.Declaration.Variables.Any(v => v.Initializer?.Value == expression)))
-    { return (false, "constant-expression context"); }
+    {
+      return (false, "constant-expression context");
+    }
     if (operation == null && !contextualArrayInitializer)
-    { return (false, "Roslyn could not bind the expression"); }
+    {
+      return (false, "Roslyn could not bind the expression");
+    }
     return (true, null);
   }
 
@@ -229,7 +272,11 @@ internal static class MutationDiscovery
         .Select((id, index) => (id, index)).ToDictionary(pair => pair.id, pair => pair.index.ToString(), StringComparer.Ordinal);
     for (var index = 0; index < candidates.Count; index++)
     {
-      candidates[index] = candidates[index] with { SiteRuntimeId = siteIndices[candidates[index].SiteId], MutantRuntimeId = mutationIndices[candidates[index].Id] };
+      candidates[index] = candidates[index] with
+      {
+        SiteRuntimeId = siteIndices[candidates[index].SiteId],
+        MutantRuntimeId = mutationIndices[candidates[index].Id]
+      };
     }
   }
 }

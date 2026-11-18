@@ -19,7 +19,14 @@ internal static class MutationPlanning
     var siteTests = new Dictionary<string, List<TestCaseDescriptor>>(StringComparer.Ordinal);
     foreach (var pair in testToSites)
     {
-      foreach (var site in pair.Value) { if (!siteTests.TryGetValue(site, out var list)) { siteTests[site] = list = []; } list.Add(testsById[pair.Key]); }
+      foreach (var site in pair.Value)
+      {
+        if (!siteTests.TryGetValue(site, out var list))
+        {
+          siteTests[site] = list = [];
+        }
+        list.Add(testsById[pair.Key]);
+      }
     }
 
     var preclassified = new List<MutationResult>(compileRejected);
@@ -57,8 +64,6 @@ internal static class MutationPlanning
     {
       diagnostics.Add($"TestHostIsolationFallback: {mutantsFallingBackToPerTestIsolation} mutants retain per-test process isolation because one or more selected tests declare resource locks.");
     }
-
-
 
     return new(executionPlan, workItems, perTestIsolationIds, perMutantIsolationIds, coverageComplete);
   }

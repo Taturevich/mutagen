@@ -65,5 +65,4 @@ internal static class ResourceAwareScheduler
 
     return 1;
   }
-
 }

@@ -1,8 +1,11 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+
 using MutationFramework.Sdk;
+
 using NUnit.Framework;
+
 using static MutationFramework.EngineTests.TestWorkspace;
 
 namespace MutationFramework.EngineTests;
@@ -56,12 +59,16 @@ public sealed class CompilationRecoveryTests
       if (method == "Add" && node.IsKind(SyntaxKind.AddExpression))
       {
         yield return new(Metadata, node, "UnknownMutationReplacement()", "invalid", node.ToString())
-        { ApplicationKind = MutationApplicationKind.ExpressionReplacement };
+        {
+          ApplicationKind = MutationApplicationKind.ExpressionReplacement
+        };
       }
       if (method == "IsAdult")
       {
         yield return new(Metadata, node, "false", "false", node.ToString())
-        { ApplicationKind = MutationApplicationKind.ExpressionReplacement };
+        {
+          ApplicationKind = MutationApplicationKind.ExpressionReplacement
+        };
       }
     }
   }

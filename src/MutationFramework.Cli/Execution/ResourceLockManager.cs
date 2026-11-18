@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+
 using Microsoft.CodeAnalysis;
 
 namespace MutationFramework.Sdk;

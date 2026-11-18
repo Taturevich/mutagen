@@ -1,10 +1,10 @@
 using System.Diagnostics;
+
 using Microsoft.CodeAnalysis;
 
 namespace MutationFramework.Sdk;
 
 internal sealed record CachedTestDiscovery(TestIdentity[] Tests);
-
 
 internal static class MutationDiscoverySession
 {
@@ -17,7 +17,9 @@ internal static class MutationDiscoverySession
     var unsupported = new List<MutationResult>();
     var cache = CacheIdentity.CreateCache(opt, app);
     var evaluation = await CompilationWorkspace.GetProductionGraph(app, opt.ProductionProjects, metrics, ct, opt.TargetFramework, cache, diagnostics);
-    var candidates = await MutationDiscovery.DiscoverCandidatesCached(evaluation.CompileFiles, app, opt, diagnostics, ct, unsupported, evaluation, cache);
+    var semanticCompilations = await ProjectSemanticCompilations.LoadAsync(app, evaluation, cache, diagnostics, ct, metrics);
+    evaluation = ProjectSemanticCompilations.ApplyInputs(evaluation, semanticCompilations);
+    var candidates = await MutationDiscovery.DiscoverCandidatesCached(evaluation.CompileFiles, app, opt, diagnostics, ct, unsupported, evaluation, cache, semanticCompilations, metrics);
     var testDlls = new List<string>();
     var testEvaluations = new List<ProjectEvaluation>(testProjects.Length);
     foreach (var test in testProjects)
@@ -56,13 +58,16 @@ internal static class MutationDiscoverySession
       if (!reusedCompilation)
       {
         var buildArgs = new List<string> { "build", test, "-c", "Debug", "--no-restore", "--nologo", "-v:q" };
-        if (!string.IsNullOrWhiteSpace(framework)) { buildArgs.Add("-f"); buildArgs.Add(framework); }
+        if (!string.IsNullOrWhiteSpace(framework))
+        {
+          buildArgs.Add("-f");
+          buildArgs.Add(framework);
+        }
         var build = await ProcessRunner.RunProcess("dotnet", buildArgs, Path.GetDirectoryName(test)!, null, opt.TimeoutSeconds, metrics, ct);
         if (build.ExitCode != 0)
         {
           throw new InvalidOperationException($"Test project build failed ({test}). " + build.Output);
         }
-
       }
 
       testDlls.Add(CompilationWorkspace.FindTestAssembly(targetPath, test, testEvaluation.AssemblyName, framework));
@@ -124,7 +129,8 @@ internal static class MutationDiscoverySession
       }
     }
     return new MutationDiscoveryResult(candidates.Select(c => new MutationCandidateInfo(c.Id, c.SiteId, c.Operator, c.File, c.Line, c.Column, c.Original, c.Replacement)).ToArray(), testIdentities, diagnostics, sw.ElapsedMilliseconds, metrics.ProcessStarts)
-    { UnsupportedMutations = unsupported };
+    {
+      UnsupportedMutations = unsupported
+    };
   }
-
 }

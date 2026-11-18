@@ -1,9 +1,12 @@
-using MutationFramework.Sdk;
-using NUnit.Framework;
-using Microsoft.CodeAnalysis;
 using System.Diagnostics;
 using System.Text.Json.Nodes;
 using System.Xml.Linq;
+
+using Microsoft.CodeAnalysis;
+
+using MutationFramework.Sdk;
+
+using NUnit.Framework;
 
 namespace MutationFramework.EngineTests;
 
@@ -12,6 +15,205 @@ using static MutationFramework.EngineTests.TestWorkspace;
 [TestFixture]
 public sealed class CompilationWorkspaceTests
 {
+  [Test]
+  [Category("Component")]
+  public async Task AdditionalProductionRootRetainsItsOwnDependencyTargetFramework()
+  {
+    var directory = NewOutputDirectory();
+    Directory.CreateDirectory(directory);
+    try
+    {
+      foreach (var name in new[] { "First", "Second", "Shared" })
+      {
+        Directory.CreateDirectory(Path.Combine(directory, name));
+      }
+      var first = Path.Combine(directory, "First", "First.csproj");
+      var second = Path.Combine(directory, "Second", "Second.csproj");
+      var shared = Path.Combine(directory, "Shared", "Shared.csproj");
+      File.WriteAllText(first, "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net11.0</TargetFramework></PropertyGroup></Project>");
+      File.WriteAllText(Path.Combine(directory, "First", "First.cs"), "public static class First { public static int Compute(int a, int b) => a + b; }");
+      File.WriteAllText(second, "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup><ItemGroup><ProjectReference Include=\"../Shared/Shared.csproj\" /></ItemGroup></Project>");
+      File.WriteAllText(Path.Combine(directory, "Second", "Second.cs"), "public static class Second { public static int Compute(int a, int b) => Shared.Compute(a, b); }");
+      File.WriteAllText(shared, "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFrameworks>net8.0;net11.0</TargetFrameworks></PropertyGroup></Project>");
+      File.WriteAllText(Path.Combine(directory, "Shared", "Shared.cs"), "public static class Shared { public static int Compute(int a, int b) => a + b; }");
+      var cache = new ArtifactCache(Path.Combine(directory, "cache"));
+      var diagnostics = new List<string>();
+      var evaluation = await CompilationWorkspace.GetProductionGraph(first, [second], new RunMetrics(), CancellationToken.None, null, cache, diagnostics);
+      Assert.That(evaluation.TargetFrameworksByProject[shared], Is.EqualTo("net8.0"));
+      var compilations = await ProjectSemanticCompilations.LoadAsync(first, evaluation, cache, diagnostics, CancellationToken.None);
+      var dependency = compilations.Single(compilation => compilation.Project == shared);
+      Assert.That(dependency.TargetFramework, Is.EqualTo("net8.0"));
+      Assert.That(dependency.ParseOptions.PreprocessorSymbolNames, Does.Contain("NET8_0"));
+      Assert.That(dependency.Compilation.Assembly.GetAttributes().Single(attribute =>
+          attribute.AttributeClass?.ToDisplayString() == "System.Runtime.Versioning.TargetFrameworkAttribute").ConstructorArguments[0].Value,
+          Is.EqualTo(".NETCoreApp,Version=v8.0"));
+    }
+    finally { Directory.Delete(directory, true); }
+  }
+
+  [Test]
+  [Category("Component")]
+  public async Task OneProjectCannotSilentlyUseTwoTargetFrameworkContextsInOneRun()
+  {
+    var directory = NewOutputDirectory();
+    Directory.CreateDirectory(directory);
+    try
+    {
+      foreach (var name in new[] { "Shared", "First", "Second" })
+      {
+        Directory.CreateDirectory(Path.Combine(directory, name));
+      }
+      File.WriteAllText(Path.Combine(directory, "Shared", "Shared.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFrameworks>net8.0;net11.0</TargetFrameworks></PropertyGroup></Project>");
+      File.WriteAllText(Path.Combine(directory, "Shared", "Shared.cs"), "public static class Shared { public static int Add(int a, int b) => a + b; }");
+      foreach (var (name, framework) in new[] { ("First", "net11.0"), ("Second", "net8.0") })
+      {
+        File.WriteAllText(Path.Combine(directory, name, name + ".csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>" + framework + "</TargetFramework></PropertyGroup><ItemGroup><ProjectReference Include=\"../Shared/Shared.csproj\" /></ItemGroup></Project>");
+      }
+      var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () => await CompilationWorkspace.GetProductionGraph(
+          Path.Combine(directory, "First", "First.csproj"), [Path.Combine(directory, "Second", "Second.csproj")], new RunMetrics(),
+          CancellationToken.None, null, new ArtifactCache(Path.Combine(directory, "cache")), []));
+      Assert.That(exception!.Message, Does.Contain("multiple target frameworks"));
+    }
+    finally { Directory.Delete(directory, true); }
+  }
+
+  [Test]
+  [Category("EndToEnd")]
+  public async Task ActualCompilerContextBindsPackagesOperatorsLinkedSourcesAndGeneratedTypes()
+  {
+    var directory = NewOutputDirectory();
+    Directory.CreateDirectory(directory);
+    try
+    {
+      foreach (var name in new[] { "Product", "Reference", "Generator" })
+      {
+        Directory.CreateDirectory(Path.Combine(directory, name));
+      }
+      File.WriteAllText(Path.Combine(directory, "Directory.Build.props"), "<Project><PropertyGroup><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><PathMap>$(MSBuildProjectDirectory)=/mapped</PathMap></PropertyGroup></Project>");
+      var reference = Path.Combine(directory, "Reference", "Reference.csproj");
+      File.WriteAllText(reference, """
+          <Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net11.0</TargetFramework><LangVersion>10</LangVersion><AssemblyName>Actual.Reference</AssemblyName></PropertyGroup>
+          <ItemGroup><Compile Include="../Linked.cs" Link="Linked.cs" /></ItemGroup></Project>
+          """);
+      File.WriteAllText(Path.Combine(directory, "Reference", "Score.cs"), "public readonly record struct Score(int Value) { public static Score operator +(Score a, Score b) => new(a.Value + b.Value); public static Score operator -(Score a, Score b) => new(a.Value - b.Value); }");
+      File.WriteAllText(Path.Combine(directory, "Linked.cs"), """
+          #if PRODUCT_CONTEXT
+          namespace ProductLinked;
+          #else
+          namespace ReferenceLinked;
+          #endif
+          public static class Linked { public static int Compute(int value) => value + 1; }
+          """);
+      var generator = Path.Combine(directory, "Generator", "Generator.csproj");
+      File.WriteAllText(generator, """
+          <Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>netstandard2.0</TargetFramework><LangVersion>10</LangVersion><EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules></PropertyGroup>
+          <ItemGroup><PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.12.0" /><Compile Include="../Linked.cs" Link="SharedHelper.cs" /></ItemGroup></Project>
+          """);
+      File.WriteAllText(Path.Combine(directory, "Generator", "Generate.cs"), """
+          using Microsoft.CodeAnalysis;
+          [Generator] public sealed class Generate : IIncrementalGenerator
+          {
+            public void Initialize(IncrementalGeneratorInitializationContext context) => context.RegisterPostInitializationOutput(output =>
+                output.AddSource("Generated.g.cs", "public static class Generated { public const int Value = 2; }"));
+          }
+          """);
+      var project = Path.Combine(directory, "Product", "Product.csproj");
+      File.WriteAllText(project, """
+          <Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net11.0</TargetFramework><AssemblyName>Actual.Product</AssemblyName><DefineConstants>$(DefineConstants);PRODUCT_CONTEXT</DefineConstants></PropertyGroup>
+          <ItemGroup>
+            <ProjectReference Include="../Reference/Reference.csproj" />
+            <ProjectReference Include="../Generator/Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+            <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.12.0" />
+            <Compile Include="../Linked.cs" Link="Linked.cs" />
+          </ItemGroup></Project>
+          """);
+      var source = Path.Combine(directory, "Product", "Product.cs");
+      File.WriteAllText(source, """
+          using Microsoft.CodeAnalysis.CSharp;
+          public static class Product
+          {
+            public static Score Add(Score a, Score b) => a + b;
+            public static bool PackageType(SyntaxKind kind) => kind == SyntaxKind.AddExpression;
+            public static int GeneratedValue() => Generated.Value + 1;
+            public static string? NullableValue(string? value) => value;
+            public static string Caller([System.Runtime.CompilerServices.CallerFilePath] string path = "") => path;
+            public static string FilePath() => Caller();
+          }
+          """);
+      var tests = WriteNUnitProject(Path.Combine(directory, "Tests"), project, """
+          using NUnit.Framework;
+          using Microsoft.CodeAnalysis.CSharp;
+          public sealed class Tests
+          {
+            [Test] public void PreservesOriginal()
+            {
+              Assert.That(Product.Add(new Score(2), new Score(3)).Value, Is.EqualTo(5));
+              Assert.That(Product.PackageType(SyntaxKind.AddExpression), Is.True);
+              Assert.That(Product.GeneratedValue(), Is.EqualTo(3));
+              Assert.That(Product.FilePath(), Does.StartWith("/mapped/"));
+              Assert.That(ProductLinked.Linked.Compute(1), Is.EqualTo(2));
+              Assert.That(ReferenceLinked.Linked.Compute(1), Is.EqualTo(2));
+            }
+          }
+          """);
+      var cache = new ArtifactCache(Path.Combine(directory, "cache"));
+      var diagnostics = new List<string>();
+      var evaluation = await CompilationWorkspace.GetProductionGraph(project, [], new RunMetrics(), CancellationToken.None, null, cache, diagnostics);
+      var compilations = await ProjectSemanticCompilations.LoadAsync(project, evaluation, cache, diagnostics, CancellationToken.None);
+      var product = compilations.Single(owner => owner.Compilation.AssemblyName == "Actual.Product").Compilation;
+      var referenced = compilations.Single(owner => owner.Compilation.AssemblyName == "Actual.Reference").Compilation;
+      Assert.That(product.Options.NullableContextOptions, Is.EqualTo(NullableContextOptions.Enable));
+      Assert.That(((Microsoft.CodeAnalysis.CSharp.CSharpParseOptions)referenced.SyntaxTrees.First().Options).LanguageVersion,
+          Is.EqualTo(Microsoft.CodeAnalysis.CSharp.LanguageVersion.CSharp10));
+      var productTree = product.SyntaxTrees.Single(tree => tree.FilePath == source);
+      var caller = productTree.GetRoot().DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.InvocationExpressionSyntax>()
+          .Single(invocation => invocation.Expression.ToString() == "Caller");
+      var operation = (Microsoft.CodeAnalysis.Operations.IInvocationOperation)product.GetSemanticModel(productTree).GetOperation(caller)!;
+      Assert.That(operation.Arguments.Single().Value.ConstantValue.Value?.ToString(), Does.StartWith("/mapped/"));
+      Assert.That(product.GetTypeByMetadataName("Generated"), Is.Not.Null);
+      Assert.That(product.GetTypeByMetadataName("Microsoft.CodeAnalysis.CSharp.SyntaxKind"), Is.Not.Null);
+      var linkedPath = Path.Combine(directory, "Linked.cs");
+      var productLinked = product.SyntaxTrees.Single(tree => tree.FilePath == linkedPath);
+      var referenceLinked = referenced.SyntaxTrees.Single(tree => tree.FilePath == linkedPath);
+      Assert.That(product.GetSemanticModel(productLinked).GetDeclaredSymbol(productLinked.GetRoot().DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.ClassDeclarationSyntax>().Single())!.ContainingNamespace.ToString(), Is.EqualTo("ProductLinked"));
+      Assert.That(referenced.GetSemanticModel(referenceLinked).GetDeclaredSymbol(referenceLinked.GetRoot().DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.ClassDeclarationSyntax>().Single())!.ContainingNamespace.ToString(), Is.EqualTo("ReferenceLinked"));
+      var options = new MutationOptions
+      {
+        ProjectPath = project,
+        TestProjects = [tests],
+        Mutators = new HashSet<string>(["binary-operators"]),
+        MaxWorkers = 1,
+        CacheDirectory = Path.Combine(directory, "cache"),
+        OutputDirectory = Path.Combine(directory, "reports")
+      };
+      var unsupported = new List<MutationResult>();
+      var candidates = await MutationDiscovery.DiscoverCandidatesCached(evaluation.CompileFiles, project, options, diagnostics,
+          CancellationToken.None, unsupported, evaluation, cache);
+      Assert.That(candidates.Any(candidate => candidate.Original == "a + b" && candidate.ResultType == "global::Score"), Is.True);
+      Assert.That(candidates.Any(candidate => candidate.Original == "kind == SyntaxKind.AddExpression"), Is.True);
+      Assert.That(candidates.Count(candidate => candidate.File.EndsWith("Linked.cs", StringComparison.Ordinal)), Is.EqualTo(2));
+      Assert.That(candidates.Any(candidate => candidate.File.Contains("Generate.cs", StringComparison.Ordinal)), Is.False);
+      Assert.That(unsupported, Is.Empty);
+      var result = await MutationEngine.RunAsync(options);
+      Assert.That(result.Mutants.Any(mutant => mutant.Status == MutationStatus.CompileError), Is.False, string.Join(Environment.NewLine, result.Diagnostics));
+      Assert.That(result.Mutants.Where(mutant => mutant.Status != MutationStatus.NoCoverage).Select(mutant => mutant.Status), Is.All.EqualTo(MutationStatus.Killed));
+      Assert.That(result.OverallStatus, Is.EqualTo("Completed"));
+      var recovered = await MutationEngine.RunAsync(new MutationOptions
+      {
+        ProjectPath = project,
+        TestProjects = [tests],
+        Registry = new MutatorRegistry([new LinkedRecoveryMutator()]),
+        MaxWorkers = 1,
+        CacheDirectory = Path.Combine(directory, "cache"),
+        OutputDirectory = Path.Combine(directory, "recovery-reports")
+      });
+      Assert.That(recovered.Mutants.Count(mutant => mutant.Status == MutationStatus.CompileError), Is.EqualTo(1));
+      Assert.That(recovered.Mutants.Count(mutant => mutant.Status == MutationStatus.Killed), Is.EqualTo(1));
+      Assert.That(recovered.Mutants, Has.Count.EqualTo(2));
+    }
+    finally { if (Directory.Exists(directory)) { Directory.Delete(directory, true); } }
+  }
+
   [Test]
   [Category("EndToEnd")]
   public async Task ConcurrentDiscoverRunsSerializeProjectEvaluationPublication()
@@ -643,5 +845,4 @@ public sealed class CompilationWorkspaceTests
       }
     }
   }
-
 }

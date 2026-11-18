@@ -1,5 +1,6 @@
-using System.Diagnostics;
 using System.Collections.Concurrent;
+using System.Diagnostics;
+
 using Microsoft.CodeAnalysis;
 
 namespace MutationFramework.Sdk;
@@ -190,7 +191,8 @@ internal sealed class CoverageCollector(MutationOptions options, ArtifactCache c
               Environment.NewLine + string.Join(Environment.NewLine, diagnostics), diagnostics);
         }
 
-        coverageTimer.Stop(); coverageMappingMs += coverageTimer.ElapsedMilliseconds;
+        coverageTimer.Stop();
+        coverageMappingMs += coverageTimer.ElapsedMilliseconds;
         probeSerializationMs += coverage.SerializationMs;
         coverageElapsed += coverageTimer.ElapsedMilliseconds + coverage.SerializationMs;
         testToSites[testCase.Id] = coverage.Sites;
@@ -213,7 +215,6 @@ internal sealed class CoverageCollector(MutationOptions options, ArtifactCache c
     {
       throw new BaselineFailureException("Baseline test failures prevent mutation execution.", diagnostics);
     }
-
 
     return new(testCases, testCasesById, resourceGroupsByTestId, testToSites, baselineByName, coverageStatuses,
         discoveryMs, baselineMs, coverageElapsed, probeSerializationMs, coverageMappingMs);

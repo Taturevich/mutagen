@@ -6,9 +6,14 @@ namespace MutationFramework.Sdk;
 
 internal sealed class BooleanConditionMutator : IMutator<ExpressionSyntax>
 {
-  public MutatorMetadata Metadata { get; } = new("boolean-conditions", 1, MutationCategory.Boolean,
+  public MutatorMetadata Metadata
+  {
+    get;
+  } = new("boolean-conditions", 1, MutationCategory.Boolean,
       new HashSet<string>(["if/while/do/for conditions"], StringComparer.Ordinal))
-  { Categories = new HashSet<MutationCategory>([MutationCategory.Boolean]) };
+  {
+    Categories = new HashSet<MutationCategory>([MutationCategory.Boolean])
+  };
 
   public IEnumerable<MutationDescription> Generate(ExpressionSyntax node, SemanticModel model,
       Func<ExpressionSyntax, SemanticModel, (bool Supported, string? Reason)> validate)
@@ -23,12 +28,16 @@ internal sealed class BooleanConditionMutator : IMutator<ExpressionSyntax>
   }
 }
 
-
 internal sealed class CheckedExpressionMutator : IMutator<CheckedExpressionSyntax>
 {
-  public MutatorMetadata Metadata { get; } = new("checked-contexts", 1, MutationCategory.Checked,
+  public MutatorMetadata Metadata
+  {
+    get;
+  } = new("checked-contexts", 1, MutationCategory.Checked,
       new HashSet<string>(["checked expression", "unchecked expression"], StringComparer.Ordinal))
-  { Categories = new HashSet<MutationCategory>([MutationCategory.Checked]) };
+  {
+    Categories = new HashSet<MutationCategory>([MutationCategory.Checked])
+  };
 
   public IEnumerable<MutationDescription> Generate(CheckedExpressionSyntax node, SemanticModel model,
       Func<ExpressionSyntax, SemanticModel, (bool Supported, string? Reason)> validate)
@@ -42,12 +51,16 @@ internal sealed class CheckedExpressionMutator : IMutator<CheckedExpressionSynta
   }
 }
 
-
 internal sealed class CollectionExpressionMutator : IMutator<CollectionExpressionSyntax>
 {
-  public MutatorMetadata Metadata { get; } = new("collection-expressions", 1, MutationCategory.CollectionExpression,
+  public MutatorMetadata Metadata
+  {
+    get;
+  } = new("collection-expressions", 1, MutationCategory.CollectionExpression,
       new HashSet<string>(["C# 12 collection expression"], StringComparer.Ordinal))
-  { Categories = new HashSet<MutationCategory>([MutationCategory.CollectionExpression]) };
+  {
+    Categories = new HashSet<MutationCategory>([MutationCategory.CollectionExpression])
+  };
 
   public IEnumerable<MutationDescription> Generate(CollectionExpressionSyntax node, SemanticModel model,
       Func<ExpressionSyntax, SemanticModel, (bool Supported, string? Reason)> validate)
@@ -57,7 +70,6 @@ internal sealed class CollectionExpressionMutator : IMutator<CollectionExpressio
     yield return new(Metadata, node, replacement, node.Elements.Count == 0 ? "collection:add-default" : "collection:empty", node.ToString(), result.Supported ? null : result.Reason);
   }
 }
-
 
 internal sealed class UnaryOperatorMutator : IMutator<PrefixUnaryExpressionSyntax>, IMutator<PostfixUnaryExpressionSyntax>
 {
@@ -76,7 +88,10 @@ internal sealed class UnaryOperatorMutator : IMutator<PrefixUnaryExpressionSynta
     [SyntaxKind.PostDecrementExpression] = "++"
   };
 
-  public MutatorMetadata Metadata { get; } = new("unary-update", 1, MutationCategory.Unary,
+  public MutatorMetadata Metadata
+  {
+    get;
+  } = new("unary-update", 1, MutationCategory.Unary,
       new HashSet<string>(["unary +/-", "bitwise complement", "prefix/postfix increment/decrement"], StringComparer.Ordinal))
   {
     Categories = new HashSet<MutationCategory>([MutationCategory.Unary, MutationCategory.Update])
@@ -103,7 +118,10 @@ internal sealed class UnaryOperatorMutator : IMutator<PrefixUnaryExpressionSynta
     var category = node.IsKind(SyntaxKind.PreIncrementExpression) || node.IsKind(SyntaxKind.PreDecrementExpression)
         ? MutationCategory.Update
         : node.IsKind(SyntaxKind.LogicalNotExpression) ? MutationCategory.Boolean : MutationCategory.Unary;
-    yield return new(Metadata with { Category = category },
+    yield return new(Metadata with
+    {
+      Category = category
+    },
         node, text, "unary:" + replacement, node.ToString(), result.Supported ? null : result.Reason);
   }
 
@@ -116,17 +134,24 @@ internal sealed class UnaryOperatorMutator : IMutator<PrefixUnaryExpressionSynta
     }
 
     var result = validate(node, model);
-    yield return new(Metadata with { Category = MutationCategory.Update }, node, $"{node.Operand}{replacement}",
+    yield return new(Metadata with
+    {
+      Category = MutationCategory.Update
+    }, node, $"{node.Operand}{replacement}",
         "unary:" + replacement, node.ToString(), result.Supported ? null : result.Reason);
   }
 }
 
-
 internal sealed class ConditionalExpressionMutator : IMutator<ConditionalExpressionSyntax>
 {
-  public MutatorMetadata Metadata { get; } = new("conditional-expressions", 1, MutationCategory.Conditional,
+  public MutatorMetadata Metadata
+  {
+    get;
+  } = new("conditional-expressions", 1, MutationCategory.Conditional,
       new HashSet<string>(["conditional operator"], StringComparer.Ordinal))
-  { Categories = new HashSet<MutationCategory>([MutationCategory.Conditional]) };
+  {
+    Categories = new HashSet<MutationCategory>([MutationCategory.Conditional])
+  };
 
   public IEnumerable<MutationDescription> Generate(ConditionalExpressionSyntax node, SemanticModel model,
       Func<ExpressionSyntax, SemanticModel, (bool Supported, string? Reason)> validate)
@@ -139,12 +164,16 @@ internal sealed class ConditionalExpressionMutator : IMutator<ConditionalExpress
   }
 }
 
-
 internal sealed class NullCoalescingMutator : IMutator<BinaryExpressionSyntax>
 {
-  public MutatorMetadata Metadata { get; } = new("null-coalescing", 1, MutationCategory.NullCoalescing,
+  public MutatorMetadata Metadata
+  {
+    get;
+  } = new("null-coalescing", 1, MutationCategory.NullCoalescing,
       new HashSet<string>(["?? expression"], StringComparer.Ordinal))
-  { Categories = new HashSet<MutationCategory>([MutationCategory.NullCoalescing]) };
+  {
+    Categories = new HashSet<MutationCategory>([MutationCategory.NullCoalescing])
+  };
 
   public IEnumerable<MutationDescription> Generate(BinaryExpressionSyntax node, SemanticModel model,
       Func<ExpressionSyntax, SemanticModel, (bool Supported, string? Reason)> validate)
@@ -161,10 +190,12 @@ internal sealed class NullCoalescingMutator : IMutator<BinaryExpressionSyntax>
   }
 }
 
-
 internal sealed class BooleanLiteralMutator : IMutator<LiteralExpressionSyntax>
 {
-  public MutatorMetadata Metadata { get; } = new("boolean-literals", 1, MutationCategory.Boolean,
+  public MutatorMetadata Metadata
+  {
+    get;
+  } = new("boolean-literals", 1, MutationCategory.Boolean,
       new HashSet<string>(["true literal", "false literal"], StringComparer.Ordinal))
   {
     Categories = new HashSet<MutationCategory>([MutationCategory.Boolean])

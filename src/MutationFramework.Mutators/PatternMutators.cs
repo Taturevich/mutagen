@@ -6,9 +6,14 @@ namespace MutationFramework.Sdk;
 
 internal sealed class IsPatternMutator : IMutator<IsPatternExpressionSyntax>
 {
-  public MutatorMetadata Metadata { get; } = new("is-patterns", 1, MutationCategory.Equality,
+  public MutatorMetadata Metadata
+  {
+    get;
+  } = new("is-patterns", 1, MutationCategory.Equality,
       new HashSet<string>(["is pattern", "is not pattern"], StringComparer.Ordinal))
-  { Categories = new HashSet<MutationCategory>([MutationCategory.Equality]) };
+  {
+    Categories = new HashSet<MutationCategory>([MutationCategory.Equality])
+  };
 
   public IEnumerable<MutationDescription> Generate(IsPatternExpressionSyntax node, SemanticModel model,
       Func<ExpressionSyntax, SemanticModel, (bool Supported, string? Reason)> validate)
@@ -22,12 +27,16 @@ internal sealed class IsPatternMutator : IMutator<IsPatternExpressionSyntax>
   }
 }
 
-
 internal sealed class BinaryPatternMutator : IMutator<BinaryPatternSyntax>
 {
-  public MutatorMetadata Metadata { get; } = new("binary-patterns", 1, MutationCategory.Logical,
+  public MutatorMetadata Metadata
+  {
+    get;
+  } = new("binary-patterns", 1, MutationCategory.Logical,
       new HashSet<string>(["and pattern", "or pattern"], StringComparer.Ordinal))
-  { Categories = new HashSet<MutationCategory>([MutationCategory.Logical]) };
+  {
+    Categories = new HashSet<MutationCategory>([MutationCategory.Logical])
+  };
 
   public IEnumerable<MutationDescription> Generate(BinaryPatternSyntax node, SemanticModel model,
       Func<ExpressionSyntax, SemanticModel, (bool Supported, string? Reason)> validate)

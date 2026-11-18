@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+
 using MutationFramework.Sdk;
+
 using NUnit.Framework;
 
 namespace MutationFramework.EngineTests;
@@ -29,9 +31,15 @@ public sealed class CacheMetadataIntegrityTests
       var metadata = JsonNode.Parse(File.ReadAllText(path))!;
       switch (corruption)
       {
-        case "payload": metadata["Payload"] = "tampered-but-valid-json"; break;
-        case "identity": metadata["ContentKey"] = ArtifactCache.ContentKey([], ["another-input"]); break;
-        case "schema": metadata["$mutagen-cache"] = 2; break;
+        case "payload":
+          metadata["Payload"] = "tampered-but-valid-json";
+          break;
+        case "identity":
+          metadata["ContentKey"] = ArtifactCache.ContentKey([], ["another-input"]);
+          break;
+        case "schema":
+          metadata["$mutagen-cache"] = 2;
+          break;
       }
       File.WriteAllText(path, corruption switch
       {

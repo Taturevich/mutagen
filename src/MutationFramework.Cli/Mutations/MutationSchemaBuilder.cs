@@ -1,15 +1,20 @@
+using System.Collections.Frozen;
 using System.Text.RegularExpressions;
+
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace MutationFramework.Sdk;
 
+internal sealed record CandidateSourceLocation(string File, string? OwnerProject);
+
 internal static class MutationSchemaBuilder
 {
   internal static void RewriteSources(Dictionary<string, string> files, List<Candidate> candidates, string projectRoot, string workspaceRoot,
       IReadOnlyDictionary<string, CSharpParseOptions>? parseOptionsByFile = null)
   {
+    var byFile = candidates.ToLookup(candidate => candidate.File, StringComparer.OrdinalIgnoreCase);
     foreach (var (original, target) in files)
     {
       var fullTarget = Path.GetFullPath(target);
@@ -26,10 +31,12 @@ internal static class MutationSchemaBuilder
       var text = File.ReadAllText(target);
       var parseOptions = parseOptionsByFile?.GetValueOrDefault(original) ?? new CSharpParseOptions(LanguageVersion.Preview);
       var tree = CSharpSyntaxTree.ParseText(text, path: target, options: parseOptions);
-      var local = candidates.Where(c => string.Equals(c.File, Path.GetRelativePath(projectRoot, original).Replace('\\', '/'), StringComparison.OrdinalIgnoreCase)).ToArray();
+      var local = byFile[Path.GetRelativePath(projectRoot, original).Replace('\\', '/')].ToArray();
       var root = tree.GetRoot();
-      var statementProbeSites = local.Where(candidate => root.DescendantNodes().OfType<ReturnStatementSyntax>()
-          .Any(statement => statement.Expression?.SpanStart == candidate.Start && statement.Expression.Span.Length == candidate.Length))
+      var returnExpressions = root.DescendantNodes().OfType<ReturnStatementSyntax>()
+          .Where(statement => statement.Expression is not null)
+          .Select(statement => (statement.Expression!.SpanStart, statement.Expression.Span.Length)).ToHashSet();
+      var statementProbeSites = local.Where(candidate => returnExpressions.Contains((candidate.Start, candidate.Length)))
           .Select(candidate => candidate.SiteRuntimeId).ToHashSet(StringComparer.Ordinal);
       var rewritten = new SchemaRewriter(local, statementProbeSites).Visit(root)!;
       File.WriteAllText(target, rewritten.ToFullString());
@@ -38,6 +45,118 @@ internal static class MutationSchemaBuilder
 
   private sealed class SchemaRewriter(IReadOnlyList<Candidate> candidates, IReadOnlySet<string> statementProbeSites) : CSharpSyntaxRewriter
   {
+    private enum SchemaKind
+    {
+      Expression, Statement, Binary, NullCoalescing, Prefix, Checked, Collection, ObjectCreation,
+      Initialization, Update, Conditional, Pattern, String, Invocation, Condition, Assignment, BooleanLiteral
+    }
+
+    private readonly FrozenDictionary<(int Start, int Length, SchemaKind Kind), Candidate[]> _index = BuildIndex(candidates);
+    private readonly FrozenDictionary<(int Start, int Length), string[]> _entrySites = candidates
+        .Where(candidate => statementProbeSites.Contains(candidate.SiteRuntimeId))
+        .GroupBy(candidate => (candidate.Start, candidate.Length))
+        .ToFrozenDictionary(group => group.Key, group => group.Select(candidate => candidate.SiteRuntimeId).Distinct(StringComparer.Ordinal).ToArray());
+
+    private Candidate[] At(SyntaxNode node, SchemaKind kind) => _index.GetValueOrDefault((node.SpanStart, node.Span.Length, kind)) ?? [];
+
+    private static FrozenDictionary<(int Start, int Length, SchemaKind Kind), Candidate[]> BuildIndex(IReadOnlyList<Candidate> mutations)
+    {
+      var buckets = new Dictionary<(int, int, SchemaKind), List<Candidate>>();
+      foreach (var candidate in mutations)
+      {
+        void Add(SchemaKind kind)
+        {
+          var key = (candidate.Start, candidate.Length, kind);
+          if (!buckets.TryGetValue(key, out var list))
+          {
+            buckets[key] = list = [];
+          }
+          list.Add(candidate);
+        }
+        if (candidate.ApplicationKind == MutationApplicationKind.ExpressionReplacement)
+        {
+          Add(SchemaKind.Expression);
+          continue;
+        }
+        if (candidate.ApplicationKind == MutationApplicationKind.StatementReplacement)
+        {
+          Add(SchemaKind.Statement);
+          continue;
+        }
+        if (candidate.ApplicationKind != MutationApplicationKind.BuiltIn)
+        {
+          continue;
+        }
+        var category = candidate.Operator;
+        if (category != nameof(MutationCategory.Boolean))
+        {
+          Add(SchemaKind.Binary);
+        }
+        if (category == nameof(MutationCategory.Removal))
+        {
+          Add(SchemaKind.Statement);
+        }
+        if (category == nameof(MutationCategory.NullCoalescing))
+        {
+          Add(SchemaKind.NullCoalescing);
+        }
+        if (category is nameof(MutationCategory.Unary) or nameof(MutationCategory.Update) ||
+            category == nameof(MutationCategory.Boolean) && candidate.ReplacementToken.StartsWith("unary:", StringComparison.Ordinal))
+        {
+          Add(SchemaKind.Prefix);
+        }
+        if (category == nameof(MutationCategory.Checked))
+        {
+          Add(SchemaKind.Checked);
+        }
+        if (category is nameof(MutationCategory.CollectionExpression) or nameof(MutationCategory.Initialization))
+        {
+          Add(SchemaKind.Collection);
+        }
+        if (category is nameof(MutationCategory.Initialization) or nameof(MutationCategory.Regex))
+        {
+          Add(SchemaKind.ObjectCreation);
+        }
+        if (category == nameof(MutationCategory.Initialization))
+        {
+          Add(SchemaKind.Initialization);
+        }
+        if (category == nameof(MutationCategory.Update))
+        {
+          Add(SchemaKind.Update);
+        }
+        if (category == nameof(MutationCategory.Conditional))
+        {
+          Add(SchemaKind.Conditional);
+        }
+        if (category is nameof(MutationCategory.Equality) or nameof(MutationCategory.Logical))
+        {
+          Add(SchemaKind.Pattern);
+        }
+        if (category == nameof(MutationCategory.String))
+        {
+          Add(SchemaKind.String);
+        }
+        if (category is nameof(MutationCategory.String) or nameof(MutationCategory.StringMethods) or nameof(MutationCategory.Linq) or nameof(MutationCategory.Math))
+        {
+          Add(SchemaKind.Invocation);
+        }
+        if (category == nameof(MutationCategory.Boolean) && candidate.ReplacementToken == "boolean:negate-condition")
+        {
+          Add(SchemaKind.Condition);
+        }
+        if (category == nameof(MutationCategory.Assignment))
+        {
+          Add(SchemaKind.Assignment);
+        }
+        if (category == nameof(MutationCategory.Boolean))
+        {
+          Add(SchemaKind.BooleanLiteral);
+        }
+      }
+      return buckets.ToFrozenDictionary(pair => pair.Key, pair => pair.Value.ToArray());
+    }
+
     public override SyntaxNode? Visit(SyntaxNode? node)
     {
       if (node is null)
@@ -48,14 +167,13 @@ internal static class MutationSchemaBuilder
       var visited = base.Visit(node);
       if (node is ExpressionSyntax originalExpression && visited is ExpressionSyntax visitedExpression)
       {
-        var extensionMutations = candidates.Where(candidate => candidate.ApplicationKind == MutationApplicationKind.ExpressionReplacement &&
-            candidate.Start == node.SpanStart && candidate.Length == node.Span.Length).ToArray();
+        var extensionMutations = At(node, SchemaKind.Expression);
         if (extensionMutations.Length == 0)
         {
           return visitedExpression;
         }
 
-        var result = visitedExpression;
+        var result = visitedExpression.WithoutTrivia();
         foreach (var candidate in extensionMutations)
         {
           var activation = candidate.UseInlineSiteProbe
@@ -81,47 +199,27 @@ internal static class MutationSchemaBuilder
 
       if (node is StatementSyntax originalStatement && visited is StatementSyntax visitedStatement)
       {
-        var extensionMutations = candidates.Where(candidate => candidate.ApplicationKind == MutationApplicationKind.StatementReplacement &&
-            candidate.Start == node.SpanStart && candidate.Length == node.Span.Length).ToArray();
-        if (extensionMutations.Length == 0)
+        var transformations = At(node, SchemaKind.Statement);
+        if (transformations.Length == 0)
         {
           return visitedStatement;
         }
 
-        var statements = new List<StatementSyntax> { SyntaxFactory.ParseStatement($"MutationRuntime.Hit({extensionMutations[0].SiteRuntimeId});") };
-        foreach (var candidate in extensionMutations)
+        // One first-order dispatch, with the recursively rewritten original only in the final else.
+        var dispatch = visitedStatement.WithoutTrivia();
+        for (var index = transformations.Length - 1; index >= 0; index--)
         {
-          statements.Add(SyntaxFactory.IfStatement(SyntaxFactory.ParseExpression($"MutationRuntime.IsActive({candidate.MutantRuntimeId})"),
+          var candidate = transformations[index];
+          dispatch = SyntaxFactory.IfStatement(SyntaxFactory.ParseExpression($"MutationRuntime.IsActive({candidate.MutantRuntimeId})"),
               SyntaxFactory.Block(SyntaxFactory.ParseStatement(candidate.Replacement)),
-              SyntaxFactory.ElseClause(SyntaxFactory.Block(visitedStatement))));
+              SyntaxFactory.ElseClause(dispatch is BlockSyntax ? dispatch : SyntaxFactory.Block(dispatch)));
         }
-        return SyntaxFactory.Block(statements).WithTriviaFrom(originalStatement);
+        var hits = transformations.Select(candidate => candidate.SiteRuntimeId).Distinct(StringComparer.Ordinal)
+            .Select(site => SyntaxFactory.ParseStatement($"MutationRuntime.Hit({site});"));
+        return SyntaxFactory.Block(hits.Append(dispatch)).WithTriviaFrom(originalStatement);
       }
 
       return visited;
-    }
-
-    public override SyntaxNode? VisitBlock(BlockSyntax node)
-    {
-      var visited = (BlockSyntax)base.VisitBlock(node)!;
-      var blockMutations = candidates.Where(candidate => candidate.Start == node.SpanStart && candidate.Length == node.Span.Length &&
-          candidate.ApplicationKind == MutationApplicationKind.BuiltIn && candidate.Operator == nameof(MutationCategory.Removal) && candidate.ReplacementToken == "removal:block").ToArray();
-      if (blockMutations.Length == 0)
-      {
-        return visited;
-      }
-
-      var statements = new List<StatementSyntax>
-      {
-        SyntaxFactory.ParseStatement($"MutationRuntime.Hit({blockMutations[0].SiteRuntimeId});")
-      };
-      foreach (var candidate in blockMutations)
-      {
-        var mutation = SyntaxFactory.ParseStatement(candidate.Replacement);
-        statements.Add(SyntaxFactory.IfStatement(SyntaxFactory.ParseExpression($"MutationRuntime.IsActive({candidate.MutantRuntimeId})"),
-            SyntaxFactory.Block(mutation), SyntaxFactory.ElseClause(visited)));
-      }
-      return SyntaxFactory.Block(statements).WithTriviaFrom(node);
     }
 
     public override SyntaxNode? VisitReturnStatement(ReturnStatementSyntax node)
@@ -130,89 +228,26 @@ internal static class MutationSchemaBuilder
       StatementSyntax rewritten = visited;
       if (node.Expression is not null)
       {
-        var entrySites = candidates.Where(candidate => candidate.Start == node.Expression.SpanStart &&
-                candidate.Length == node.Expression.Span.Length && statementProbeSites.Contains(candidate.SiteRuntimeId))
-            .Select(candidate => candidate.SiteRuntimeId).Distinct(StringComparer.Ordinal).ToArray();
+        var entrySites = _entrySites.GetValueOrDefault((node.Expression.SpanStart, node.Expression.Span.Length)) ?? [];
         if (entrySites.Length > 0)
         {
           var hits = entrySites.Select(site => (StatementSyntax)SyntaxFactory.ParseStatement($"MutationRuntime.Hit({site});"));
-          rewritten = SyntaxFactory.Block(hits.Append(visited)).WithTriviaFrom(node);
+          rewritten = SyntaxFactory.Block(hits.Append(visited.WithoutTrivia())).WithTriviaFrom(node);
         }
       }
 
-      var removal = RewriteRemovedStatement(node, rewritten);
-      if (removal is not null)
-      {
-        return removal;
-      }
       return rewritten;
-    }
-
-    public override SyntaxNode? VisitBreakStatement(BreakStatementSyntax node)
-    {
-      var visited = (StatementSyntax)base.VisitBreakStatement(node)!;
-      return RewriteRemovedStatement(node, visited) ?? visited;
-    }
-
-    public override SyntaxNode? VisitContinueStatement(ContinueStatementSyntax node)
-    {
-      var visited = (StatementSyntax)base.VisitContinueStatement(node)!;
-      return RewriteRemovedStatement(node, visited) ?? visited;
-    }
-
-    public override SyntaxNode? VisitGotoStatement(GotoStatementSyntax node)
-    {
-      var visited = (StatementSyntax)base.VisitGotoStatement(node)!;
-      return RewriteRemovedStatement(node, visited) ?? visited;
-    }
-
-    public override SyntaxNode? VisitThrowStatement(ThrowStatementSyntax node)
-    {
-      var visited = (StatementSyntax)base.VisitThrowStatement(node)!;
-      return RewriteRemovedStatement(node, visited) ?? visited;
-    }
-
-    public override SyntaxNode? VisitYieldStatement(YieldStatementSyntax node)
-    {
-      var visited = (StatementSyntax)base.VisitYieldStatement(node)!;
-      return RewriteRemovedStatement(node, visited) ?? visited;
-    }
-
-    public override SyntaxNode? VisitExpressionStatement(ExpressionStatementSyntax node)
-    {
-      var visited = (StatementSyntax)base.VisitExpressionStatement(node)!;
-      return RewriteRemovedStatement(node, visited) ?? visited;
-    }
-
-    private BlockSyntax? RewriteRemovedStatement(StatementSyntax original, StatementSyntax visited)
-    {
-      var candidatesForStatement = candidates.Where(candidate => candidate.Start == original.SpanStart &&
-          candidate.Length == original.Span.Length && candidate.ApplicationKind == MutationApplicationKind.BuiltIn &&
-          candidate.Operator == nameof(MutationCategory.Removal)).ToArray();
-      if (candidatesForStatement.Length == 0)
-      {
-        return null;
-      }
-
-      var body = new List<StatementSyntax> { SyntaxFactory.ParseStatement($"MutationRuntime.Hit({candidatesForStatement[0].SiteRuntimeId});") };
-      foreach (var candidate in candidatesForStatement)
-      {
-        var mutated = SyntaxFactory.ParseStatement(candidate.Replacement);
-        body.Add(SyntaxFactory.IfStatement(SyntaxFactory.ParseExpression($"MutationRuntime.IsActive({candidate.MutantRuntimeId})"),
-            SyntaxFactory.Block(mutated), SyntaxFactory.ElseClause(SyntaxFactory.Block(visited))));
-      }
-      return SyntaxFactory.Block(body).WithTriviaFrom(original);
     }
 
     public override SyntaxNode? VisitBinaryExpression(BinaryExpressionSyntax node)
     {
-      var visited = (BinaryExpressionSyntax)base.VisitBinaryExpression(node)!;
-      var ops = candidates.Where(c => c.ApplicationKind == MutationApplicationKind.BuiltIn && c.Start == node.SpanStart && c.Length == node.Span.Length && c.Operator != "Boolean").ToArray();
+      var visited = ((BinaryExpressionSyntax)base.VisitBinaryExpression(node)!).WithoutTrivia();
+      var ops = At(node, SchemaKind.Binary);
       if (ops.Any(candidate => candidate.Operator == MutationCategory.NullCoalescing.ToString()))
       {
-        return RewriteExpression(node, visited, ops.Where(candidate => candidate.Operator == MutationCategory.NullCoalescing.ToString()).ToArray());
+        return RewriteExpression(node, visited, At(node, SchemaKind.NullCoalescing));
       }
-      ExpressionSyntax result = visited;
+      ExpressionSyntax result = visited.WithoutTrivia();
       foreach (var c in ops)
       {
         var mut = c.ReplacementToken == "~^"
@@ -236,33 +271,28 @@ internal static class MutationSchemaBuilder
     public override SyntaxNode? VisitPrefixUnaryExpression(PrefixUnaryExpressionSyntax node)
     {
       var visited = (PrefixUnaryExpressionSyntax)base.VisitPrefixUnaryExpression(node)!;
-      var ops = candidates.Where(candidate => candidate.ApplicationKind == MutationApplicationKind.BuiltIn && candidate.Start == node.SpanStart && candidate.Length == node.Span.Length &&
-          (candidate.Operator is nameof(MutationCategory.Unary) or nameof(MutationCategory.Update) ||
-           candidate.Operator == nameof(MutationCategory.Boolean) && candidate.ReplacementToken.StartsWith("unary:", StringComparison.Ordinal))).ToArray();
+      var ops = At(node, SchemaKind.Prefix);
       return ops.Length == 0 ? visited : RewriteExpression(node, visited, ops);
     }
 
     public override SyntaxNode? VisitCheckedExpression(CheckedExpressionSyntax node)
     {
       var visited = (CheckedExpressionSyntax)base.VisitCheckedExpression(node)!;
-      var ops = candidates.Where(candidate => candidate.ApplicationKind == MutationApplicationKind.BuiltIn && candidate.Start == node.SpanStart && candidate.Length == node.Span.Length &&
-          candidate.Operator == nameof(MutationCategory.Checked)).ToArray();
+      var ops = At(node, SchemaKind.Checked);
       return ops.Length == 0 ? visited : RewriteExpression(node, visited, ops);
     }
 
     public override SyntaxNode? VisitCollectionExpression(CollectionExpressionSyntax node)
     {
       var visited = (CollectionExpressionSyntax)base.VisitCollectionExpression(node)!;
-      var ops = candidates.Where(candidate => candidate.ApplicationKind == MutationApplicationKind.BuiltIn && candidate.Start == node.SpanStart && candidate.Length == node.Span.Length &&
-          candidate.Operator is nameof(MutationCategory.CollectionExpression) or nameof(MutationCategory.Initialization)).ToArray();
+      var ops = At(node, SchemaKind.Collection);
       return ops.Length == 0 ? visited : RewriteExpression(node, visited, ops);
     }
 
     public override SyntaxNode? VisitObjectCreationExpression(ObjectCreationExpressionSyntax node)
     {
       var visited = (ObjectCreationExpressionSyntax)base.VisitObjectCreationExpression(node)!;
-      var ops = candidates.Where(candidate => candidate.ApplicationKind == MutationApplicationKind.BuiltIn && candidate.Start == node.SpanStart && candidate.Length == node.Span.Length &&
-          candidate.Operator is nameof(MutationCategory.Initialization) or nameof(MutationCategory.Regex)).ToArray();
+      var ops = At(node, SchemaKind.ObjectCreation);
       return ops.Length == 0 ? visited : RewriteExpression(node, visited, ops);
     }
 
@@ -287,8 +317,7 @@ internal static class MutationSchemaBuilder
     public override SyntaxNode? VisitVariableDeclarator(VariableDeclaratorSyntax node)
     {
       var visited = (VariableDeclaratorSyntax)base.VisitVariableDeclarator(node)!;
-      var candidate = candidates.FirstOrDefault(mutation => mutation.ApplicationKind == MutationApplicationKind.BuiltIn && mutation.Start == node.SpanStart && mutation.Length == node.Span.Length &&
-          mutation.Operator == nameof(MutationCategory.Initialization));
+      var candidate = At(node, SchemaKind.Initialization).FirstOrDefault();
       if (candidate is null || node.Initializer?.Value is not InitializerExpressionSyntax initializer ||
           node.Parent is not VariableDeclarationSyntax { Type: ArrayTypeSyntax arrayType })
       {
@@ -303,56 +332,49 @@ internal static class MutationSchemaBuilder
 
     private ExpressionSyntax RewriteInitialization(ExpressionSyntax original, ExpressionSyntax visited)
     {
-      var ops = candidates.Where(candidate => candidate.ApplicationKind == MutationApplicationKind.BuiltIn && candidate.Start == original.SpanStart && candidate.Length == original.Span.Length &&
-          candidate.Operator == nameof(MutationCategory.Initialization)).ToArray();
+      var ops = At(original, SchemaKind.Initialization);
       return ops.Length == 0 ? visited : RewriteExpression(original, visited, ops);
     }
 
     public override SyntaxNode? VisitPostfixUnaryExpression(PostfixUnaryExpressionSyntax node)
     {
       var visited = (PostfixUnaryExpressionSyntax)base.VisitPostfixUnaryExpression(node)!;
-      var ops = candidates.Where(candidate => candidate.ApplicationKind == MutationApplicationKind.BuiltIn && candidate.Start == node.SpanStart && candidate.Length == node.Span.Length &&
-          candidate.Operator == nameof(MutationCategory.Update)).ToArray();
+      var ops = At(node, SchemaKind.Update);
       return ops.Length == 0 ? visited : RewriteExpression(node, visited, ops);
     }
 
     public override SyntaxNode? VisitConditionalExpression(ConditionalExpressionSyntax node)
     {
       var visited = (ConditionalExpressionSyntax)base.VisitConditionalExpression(node)!;
-      var ops = candidates.Where(candidate => candidate.ApplicationKind == MutationApplicationKind.BuiltIn && candidate.Start == node.SpanStart && candidate.Length == node.Span.Length &&
-          candidate.Operator == nameof(MutationCategory.Conditional)).ToArray();
+      var ops = At(node, SchemaKind.Conditional);
       return ops.Length == 0 ? visited : RewriteExpression(node, visited, ops);
     }
 
     public override SyntaxNode? VisitIsPatternExpression(IsPatternExpressionSyntax node)
     {
       var visited = (IsPatternExpressionSyntax)base.VisitIsPatternExpression(node)!;
-      var ops = candidates.Where(candidate => candidate.ApplicationKind == MutationApplicationKind.BuiltIn && candidate.Start == node.SpanStart && candidate.Length == node.Span.Length &&
-          candidate.Operator is nameof(MutationCategory.Equality) or nameof(MutationCategory.Logical)).ToArray();
+      var ops = At(node, SchemaKind.Pattern);
       return ops.Length == 0 ? visited : RewriteExpression(node, visited, ops);
     }
 
     public override SyntaxNode? VisitMemberAccessExpression(MemberAccessExpressionSyntax node)
     {
       var visited = (MemberAccessExpressionSyntax)base.VisitMemberAccessExpression(node)!;
-      var ops = candidates.Where(candidate => candidate.ApplicationKind == MutationApplicationKind.BuiltIn && candidate.Start == node.SpanStart && candidate.Length == node.Span.Length &&
-          candidate.Operator == nameof(MutationCategory.String)).ToArray();
+      var ops = At(node, SchemaKind.String);
       return ops.Length == 0 ? visited : RewriteExpression(node, visited, ops);
     }
 
     public override SyntaxNode? VisitInvocationExpression(InvocationExpressionSyntax node)
     {
       var visited = (InvocationExpressionSyntax)base.VisitInvocationExpression(node)!;
-      var ops = candidates.Where(candidate => candidate.ApplicationKind == MutationApplicationKind.BuiltIn && candidate.Start == node.SpanStart && candidate.Length == node.Span.Length &&
-          candidate.Operator is nameof(MutationCategory.String) or nameof(MutationCategory.StringMethods) or nameof(MutationCategory.Linq) or nameof(MutationCategory.Math)).ToArray();
+      var ops = At(node, SchemaKind.Invocation);
       return ops.Length == 0 ? visited : RewriteExpression(node, visited, ops);
     }
 
     public override SyntaxNode? VisitInterpolatedStringExpression(InterpolatedStringExpressionSyntax node)
     {
       var visited = (InterpolatedStringExpressionSyntax)base.VisitInterpolatedStringExpression(node)!;
-      var ops = candidates.Where(candidate => candidate.ApplicationKind == MutationApplicationKind.BuiltIn && candidate.Start == node.SpanStart && candidate.Length == node.Span.Length &&
-          candidate.Operator == nameof(MutationCategory.String)).ToArray();
+      var ops = At(node, SchemaKind.String);
       return ops.Length == 0 ? visited : RewriteExpression(node, visited, ops);
     }
 
@@ -390,14 +412,13 @@ internal static class MutationSchemaBuilder
 
     private ExpressionSyntax RewriteCondition(ExpressionSyntax original, ExpressionSyntax visited)
     {
-      var ops = candidates.Where(candidate => candidate.ApplicationKind == MutationApplicationKind.BuiltIn && candidate.Start == original.SpanStart && candidate.Length == original.Span.Length &&
-          candidate.Operator == nameof(MutationCategory.Boolean) && candidate.ReplacementToken == "boolean:negate-condition").ToArray();
+      var ops = At(original, SchemaKind.Condition);
       return ops.Length == 0 ? visited : RewriteExpression(original, visited, ops);
     }
 
     private ExpressionSyntax RewriteExpression(SyntaxNode original, ExpressionSyntax visited, Candidate[] ops)
     {
-      var result = visited;
+      var result = visited.WithoutTrivia();
       foreach (var candidate in ops)
       {
         var mutation = SyntaxFactory.ParseExpression(candidate.Replacement);
@@ -420,8 +441,8 @@ internal static class MutationSchemaBuilder
     public override SyntaxNode? VisitAssignmentExpression(AssignmentExpressionSyntax node)
     {
       var visited = (AssignmentExpressionSyntax)base.VisitAssignmentExpression(node)!;
-      var ops = candidates.Where(candidate => candidate.ApplicationKind == MutationApplicationKind.BuiltIn && candidate.Start == node.SpanStart && candidate.Length == node.Span.Length && candidate.Operator == MutationCategory.Assignment.ToString()).ToArray();
-      ExpressionSyntax result = visited;
+      var ops = At(node, SchemaKind.Assignment);
+      ExpressionSyntax result = visited.WithoutTrivia();
       foreach (var candidate in ops)
       {
         var mutation = SyntaxFactory.ParseExpression($"{visited.Left} {candidate.ReplacementToken} ({visited.Right})");
@@ -443,10 +464,10 @@ internal static class MutationSchemaBuilder
     }
     public override SyntaxNode? VisitLiteralExpression(LiteralExpressionSyntax node)
     {
-      var c = candidates.FirstOrDefault(x => x.ApplicationKind == MutationApplicationKind.BuiltIn && x.Operator == "Boolean" && x.Start == node.SpanStart); if (c == null)
+      var c = At(node, SchemaKind.BooleanLiteral).FirstOrDefault();
+      if (c == null)
       {
-        var stringOps = candidates.Where(candidate => candidate.ApplicationKind == MutationApplicationKind.BuiltIn && candidate.Start == node.SpanStart && candidate.Length == node.Span.Length &&
-            candidate.Operator == nameof(MutationCategory.String)).ToArray();
+        var stringOps = At(node, SchemaKind.String);
         var visited = (LiteralExpressionSyntax)base.VisitLiteralExpression(node)!;
         return stringOps.Length == 0 ? visited : RewriteExpression(node, visited, stringOps);
       }
@@ -454,7 +475,7 @@ internal static class MutationSchemaBuilder
       var activation = c.UseInlineSiteProbe
           ? $"MutationRuntime.IsActiveAndHit({c.SiteRuntimeId}, {c.MutantRuntimeId})"
           : $"MutationRuntime.IsActive({c.MutantRuntimeId})";
-      var expr = (ExpressionSyntax)SyntaxFactory.ParseExpression($"{activation} ? {c.Replacement} : {node}").WithTriviaFrom(node);
+      var expr = (ExpressionSyntax)SyntaxFactory.ParseExpression($"{activation} ? {c.Replacement} : {node}");
       if (statementProbeSites.Contains(c.SiteRuntimeId) || c.UseInlineSiteProbe)
       {
         return expr.WithTriviaFrom(node);
@@ -464,7 +485,8 @@ internal static class MutationSchemaBuilder
     }
   }
 
-  internal static List<(Candidate Candidate, string Diagnostic)> FindInvalidCandidates(string buildOutput, IReadOnlyList<Candidate> candidates, string appCopy)
+  internal static List<(Candidate Candidate, string Diagnostic)> FindInvalidCandidates(string buildOutput, IReadOnlyList<Candidate> candidates, string appCopy,
+      IReadOnlyDictionary<string, CandidateSourceLocation>? sourceMappings = null)
   {
     const string diagnosticPattern = @"^(?<path>.+?)\((?<line>\d+),(?<column>\d+)\): error (?<code>CS\d+): (?<message>.*)$";
     var failures = new Dictionary<string, (Candidate Candidate, string Diagnostic)>(StringComparer.Ordinal);
@@ -473,8 +495,12 @@ internal static class MutationSchemaBuilder
       var file = Path.GetFullPath(match.Groups["path"].Value.Trim());
       var line = int.Parse(match.Groups["line"].Value, System.Globalization.CultureInfo.InvariantCulture);
       var diagnostic = $"{match.Groups["code"].Value}: {match.Groups["message"].Value.Trim()}";
+      var source = sourceMappings?.GetValueOrDefault(file);
       foreach (var candidate in candidates.Where(candidate => candidate.Line == line &&
-                   string.Equals(Path.GetFullPath(Path.Combine(appCopy, candidate.File)), file, StringComparison.OrdinalIgnoreCase)))
+          (source is not null
+              ? string.Equals(candidate.File, source.File, StringComparison.OrdinalIgnoreCase) &&
+                  (source.OwnerProject is null || string.Equals(candidate.OwnerProject, source.OwnerProject, StringComparison.OrdinalIgnoreCase))
+              : string.Equals(Path.GetFullPath(Path.Combine(appCopy, candidate.File)), file, StringComparison.OrdinalIgnoreCase))))
       {
         failures.TryAdd(candidate.Id, (candidate, diagnostic));
       }

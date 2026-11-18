@@ -146,8 +146,14 @@ the executor does not construct fingerprints or interpret raw manifests.
 
 `MutationResultAggregator` constructs one deterministic report model with counts,
 profiles, timing and execution counters. `MutationReportWriter` serializes that
-completed model as schema-4 JSON and HTML, retaining HTML encoding. The second
-write intentionally retains the existing reporting-duration contract.
+completed model as schema-4 JSON and HTML, retaining HTML encoding. Only selected
+formats are staged in the destination directory and each selected file is published
+by an atomic overwrite rename. Cancellation/serialization failures preserve previous
+reports; unselected files are untouched. Publication is atomic per file, not a
+transaction across JSON and HTML. Each report field/HTML row is serialized once.
+Reporting timing ends after HTML row preparation and serialization of the main JSON
+properties, before final timing metadata, HTML header/file I/O, flushing and renames.
+The JSON and HTML metadata and returned model use the same finalized values.
 
 ## Extending and verifying
 
@@ -172,3 +178,66 @@ read-only fixture paths, and use unique writable directories. `Unit`, `Component
 and `EndToEnd` categories permit focused feedback; conformance suites retain their
 matrix-consumption gate. Performance benchmarks remain explicit opt-ins. See
 the README for commands and `docs/benchmarks.md` for historical measurements.
+
+## Correctness and scalability remediation (2026-11-17)
+
+Semantic discovery uses each project's actual successful C# compiler invocation,
+obtained from MSBuild's `CscCommandLineArgs`, and compiler-emitted generator output.
+References retain aliases and embed-interop properties; Roslyn's command-line parser
+supplies parse/compilation options, nullable settings, symbols and output identity.
+Production discovery never uses runtime trusted-platform references. The synchronous
+in-memory fixture API retains a caller-supplied/test compilation fallback.
+
+Cold contexts restore graph roots and rebuild each project once in dependency order,
+without recursively rebuilding its dependencies. Build-only analyzer/generator project
+references participate in build/configuration/cache inputs but are not mutation roots.
+The provider retains immutable source/reference snapshots under the same graph locks
+used by discovery builds. Binding is lazy and shared within that context, so a validated
+candidate-cache hit does not repeat binding. The reconstructed compilation must have
+no binding errors against its successful actual build. Unsupported/custom compiler
+invocations fail explicitly rather than falling back to incomplete runtime references.
+Custom builds with untracked generated inputs continue to bypass affected cache phases.
+Arbitrary generator reads of external, undeclared inputs are outside the cache contract.
+
+Every mutation is bound to its owning project and framework. Each graph project retains
+its evaluated target framework, selected from its immediate parent; additional production
+roots retain their own dependency selections. A project required at two different target
+frameworks in one run is rejected explicitly: select a compatible common framework or run
+the targets separately. Linked files shared by
+production projects get separate schema copies and parse options under each owner's
+`obj/MutagenOwned`, with compiled-path aliases retained for diagnostic recovery.
+Stable IDs retain assembly/framework/file/span/replacement identity; previously
+conflated linked owners now receive their proper assembly identities.
+
+Statement replacement and built-in removal use one dispatch per syntax node, with
+the recursively rewritten original only in the final branch. Local declarations,
+using declarations, local functions, labels, and escaping out/pattern declarations
+are explicitly unsupported extension dispatch sites because wrapping changes scope
+or lifetime. Runtime initialization rejects simultaneous activations at one site.
+Span/application indexes and return-expression probe indexes are built once per tree.
+
+Mutation failures require an exact selected structured VSTest result and execution
+of that case's activated site, after a passing baseline. Mutation runs collect per-test
+site hits in serialized NUnit execution. Helpers, async exceptions and absent stack
+traces are supported; diagnostic text does not establish lifecycle or attribution.
+VSTest/NUnit expose no portable reliable setup/body/teardown phase, so fixture failures
+use the same site evidence rule and insufficient evidence remains inconclusive.
+Run completion, adapter errors, crashes, timeouts and external cancellation remain
+separate evidence. Only intentional cancellation after a confirmed kill permits bailed
+remaining cases; bailed/canceled cases alone cannot imply survival. Structured ActiveTests
+and completed results retain execution evidence; started cases canceled after a kill are
+separate from unstarted selected cases. Mutation execution counters count observed executions,
+including started cases interrupted before a result, rather than every selected case.
+
+Planning stores actual test/batch memberships and first-free bounds, never unique
+conflicting pairs. Exact edge counting uses sparse inverted 64-bit blocks and one
+reused neighborhood buffer, grouping identical coverage sets. Public `ConflictEdges`
+remains Int32; when the exact count exceeds it, the legacy field is capped and the
+additive `ExactConflictEdges` Int64 plus `ConflictEdgesOverflow` report that transition
+explicitly. HTML displays the exact count. No estimate is presented as an exact value.
+
+Deployment requires rebuilding the existing CLI/SDK; no services, migrations or new
+runtime dependencies are required. Engine/mutator MVIDs and affected artifact-version
+keys invalidate changed schemas, classification and semantic inputs. Roll back by
+rebuilding the previous revision; caches remain content-addressed and independently
+versioned. Reports remain schema 4 with additive statistics/timing fields.

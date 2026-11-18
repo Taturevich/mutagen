@@ -1,8 +1,9 @@
+using System.Security.Cryptography;
+using System.Text;
+
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using System.Security.Cryptography;
-using System.Text;
 
 namespace MutationFramework.Sdk;
 
@@ -18,9 +19,14 @@ internal sealed class RegexMutator : IMutator<ObjectCreationExpressionSyntax>
     ['S'] = 's'
   };
 
-  public MutatorMetadata Metadata { get; } = new("regex-patterns", 1, MutationCategory.Regex,
+  public MutatorMetadata Metadata
+  {
+    get;
+  } = new("regex-patterns", 1, MutationCategory.Regex,
       new HashSet<string>(["anchors", "character classes", "quantifiers", "lookarounds", "capture groups"], StringComparer.Ordinal))
-  { Categories = new HashSet<MutationCategory>([MutationCategory.Regex]) };
+  {
+    Categories = new HashSet<MutationCategory>([MutationCategory.Regex])
+  };
 
   public IEnumerable<MutationDescription> Generate(ObjectCreationExpressionSyntax node, SemanticModel model,
       Func<ExpressionSyntax, SemanticModel, (bool Supported, string? Reason)> validate)

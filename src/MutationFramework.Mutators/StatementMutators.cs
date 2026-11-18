@@ -6,9 +6,14 @@ namespace MutationFramework.Sdk;
 
 internal sealed class RemovalMutator : IMutator
 {
-  public MutatorMetadata Metadata { get; } = new("statement-removal", 1, MutationCategory.Removal,
+  public MutatorMetadata Metadata
+  {
+    get;
+  } = new("statement-removal", 1, MutationCategory.Removal,
       new HashSet<string>(["return", "break", "continue", "goto", "throw", "yield", "invocation statements", "nested blocks"], StringComparer.Ordinal))
-  { Categories = new HashSet<MutationCategory>([MutationCategory.Removal]) };
+  {
+    Categories = new HashSet<MutationCategory>([MutationCategory.Removal])
+  };
 
   public IEnumerable<MutationDescription> Generate(SyntaxNode node, SemanticModel model,
       Func<ExpressionSyntax, SemanticModel, (bool Supported, string? Reason)> validate)
@@ -153,12 +158,16 @@ internal sealed class RemovalMutator : IMutator
   }
 }
 
-
 internal sealed class InitializationMutator : IMutator
 {
-  public MutatorMetadata Metadata { get; } = new("initialization", 1, MutationCategory.Initialization,
+  public MutatorMetadata Metadata
+  {
+    get;
+  } = new("initialization", 1, MutationCategory.Initialization,
       new HashSet<string>(["array initializers", "stackalloc array initializers", "object initializers", "collection expressions"], StringComparer.Ordinal))
-  { Categories = new HashSet<MutationCategory>([MutationCategory.Initialization]) };
+  {
+    Categories = new HashSet<MutationCategory>([MutationCategory.Initialization])
+  };
 
   public IEnumerable<MutationDescription> Generate(SyntaxNode node, SemanticModel model,
       Func<ExpressionSyntax, SemanticModel, (bool Supported, string? Reason)> validate)

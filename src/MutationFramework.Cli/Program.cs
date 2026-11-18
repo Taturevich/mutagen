@@ -1,4 +1,5 @@
 using System.Text.Json;
+
 using MutationFramework.Sdk;
 
 static IReadOnlyDictionary<string, IReadOnlyList<string>> ParseResourceLocks(string? value)
@@ -50,8 +51,10 @@ try
   }
   if (command == "report")
   {
-    var json = File.ReadAllText(values["input"]); using var doc = JsonDocument.Parse(json);
-    Console.WriteLine(JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions { WriteIndented = true })); return 0;
+    var json = File.ReadAllText(values["input"]);
+    using var doc = JsonDocument.Parse(json);
+    Console.WriteLine(JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions { WriteIndented = true }));
+    return 0;
   }
   if (command is not ("run" or "discover" or "plan"))
   {

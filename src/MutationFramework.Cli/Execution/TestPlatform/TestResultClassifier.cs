@@ -5,21 +5,29 @@ namespace MutationFramework.Sdk;
 internal static class TestResultClassifier
 {
   internal static Dictionary<string, PlatformTestResult> PartialResults(IReadOnlyList<TestCaseDescriptor> tests,
-      IEnumerable<TestResult> observedResults, bool capturePerTestCoverage)
+      IEnumerable<TestResult> observedResults, bool capturePerTestCoverage, IReadOnlyDictionary<string, string>? expectedSites = null, IReadOnlySet<Guid>? startedTests = null)
   {
     var expectedIds = tests.Select(test => test.Case.Id).ToHashSet();
     var results = observedResults.Where(result => expectedIds.Contains(result.TestCase.Id))
         .GroupBy(result => result.TestCase.Id).ToDictionary(group => group.Key, group => group.First());
-    return tests.ToDictionary(test => test.Id,
-        test => results.TryGetValue(test.Case.Id, out var result)
-            ? result.Outcome == TestOutcome.None
-                ? new PlatformTestResult(TestFailureKind.Bailed, "BAILED: Test execution was canceled after an attributable failure killed this mutant.")
-                : ConvertResult(test, result, capturePerTestCoverage)
-            : new PlatformTestResult(TestFailureKind.Bailed, "BAILED: Not executed after an attributable test failure killed this mutant."),
-        StringComparer.Ordinal);
+    return tests.ToDictionary(test => test.Id, test =>
+    {
+      if (results.TryGetValue(test.Case.Id, out var result) && result.Outcome != TestOutcome.None)
+      {
+        return ConvertResult(test, result, capturePerTestCoverage, expectedSites?.GetValueOrDefault(test.Id));
+      }
+      var started = startedTests?.Contains(test.Case.Id) == true;
+      return new PlatformTestResult(TestFailureKind.Bailed,
+          started ? "BAILED: Started test canceled after an attributable failure killed this mutant."
+              : "BAILED: Not executed after an attributable failure killed this mutant.")
+      {
+        State = started ? TestExecutionState.Canceled : TestExecutionState.NotExecuted,
+        ExecutionObserved = started
+      };
+    }, StringComparer.Ordinal);
   }
 
-  internal static PlatformTestResult ConvertResult(TestCaseDescriptor test, TestResult result, bool capturePerTestCoverage)
+  internal static PlatformTestResult ConvertResult(TestCaseDescriptor test, TestResult result, bool capturePerTestCoverage, string? expectedActiveSite = null)
   {
     var durationMs = Math.Max(0, (long)result.Duration.TotalMilliseconds);
     var converted = result.Outcome switch
@@ -29,6 +37,17 @@ internal static class TestResultClassifier
       TestOutcome.Failed => ClassifyFailure(test, result) with { DurationMs = durationMs },
       _ => new(TestFailureKind.Infrastructure, $"INFRASTRUCTURE: Unexpected test outcome '{result.Outcome}'.", DurationMs: durationMs)
     };
+    converted = converted with
+    {
+      State = result.Outcome == TestOutcome.Skipped ? TestExecutionState.Skipped : TestExecutionState.Completed,
+      ExecutionObserved = result.Outcome != TestOutcome.None
+    };
+    PlatformTestResult MissingCoverage(string error) => converted with
+    {
+      CoverageError = error,
+      FailureKind = expectedActiveSite is not null && converted.FailureKind == TestFailureKind.None ? TestFailureKind.Unattributed : converted.FailureKind,
+      Error = converted.Error ?? "INCONCLUSIVE: Mutation execution coverage could not be verified."
+    };
     if (!capturePerTestCoverage)
     {
       return converted;
@@ -37,41 +56,48 @@ internal static class TestResultClassifier
     var properties = result.GetProperties().ToDictionary(pair => pair.Key.Id, pair => pair.Value?.ToString(), StringComparer.Ordinal);
     if (properties.TryGetValue(MutationFramework.CoverageCollector.MutationCoverageCollector.ErrorProperty, out var coverageError))
     {
-      return converted with { CoverageError = coverageError };
+      return MissingCoverage(coverageError ?? "Coverage collection failed.");
     }
 
     if (!properties.TryGetValue(MutationFramework.CoverageCollector.MutationCoverageCollector.CoverageProperty, out var coverage))
     {
-      return converted with { CoverageError = "VSTest did not return per-test coverage from the in-process collector." };
+      return MissingCoverage("VSTest did not return per-test coverage from the in-process collector.");
     }
 
     var ids = (coverage ?? string.Empty).Trim(';')
         .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     if (ids.Any(id => !int.TryParse(id, out _)))
     {
-      return converted with { CoverageError = "The in-process collector returned malformed site identifiers." };
+      return MissingCoverage("The in-process collector returned malformed site identifiers.");
     }
 
-    return converted with { CoveredRuntimeSiteIds = ids };
+    // Baselines must have passed before scheduling. A failed exact selected case is
+    // attributable only after its responsible activated site actually executed. VSTest
+    // does not expose a portable setup/body/teardown phase; no phase is inferred here.
+    if (converted.FailureKind == TestFailureKind.Unattributed && expectedActiveSite is not null &&
+        ids.Contains(expectedActiveSite, StringComparer.Ordinal))
+    {
+      converted = converted with
+      {
+        FailureKind = TestFailureKind.TestBody
+      };
+    }
+    if (expectedActiveSite is not null && converted.FailureKind == TestFailureKind.None && !ids.Contains(expectedActiveSite, StringComparer.Ordinal))
+    {
+      converted = converted with
+      {
+        FailureKind = TestFailureKind.Unattributed,
+        Error = "INCONCLUSIVE: Selected test did not execute the activated mutation site."
+      };
+    }
+    return converted with
+    {
+      CoveredRuntimeSiteIds = ids
+    };
   }
 
   internal static PlatformTestResult ClassifyFailure(TestCaseDescriptor test, TestResult result)
   {
-    var testBodyFailure = HasTestBodyFailureEvidence(test.FullyQualifiedName, result.ErrorStackTrace);
-    var kind = testBodyFailure ? "TEST_FAILURE" : "TEST_FAILURE_UNATTRIBUTED";
-    return new(testBodyFailure ? TestFailureKind.TestBody : TestFailureKind.Unattributed, kind + ": " + result.ErrorMessage + Environment.NewLine + result.ErrorStackTrace);
+    return new(TestFailureKind.Unattributed, "TEST_FAILURE: " + result.ErrorMessage + Environment.NewLine + result.ErrorStackTrace);
   }
-
-  internal static bool HasTestBodyFailureEvidence(string fullyQualifiedName, string? stackTrace)
-  {
-    if (string.IsNullOrWhiteSpace(stackTrace))
-    {
-      return false;
-    }
-
-    var parameters = fullyQualifiedName.IndexOf('(');
-    var methodIdentity = parameters < 0 ? fullyQualifiedName : fullyQualifiedName[..parameters];
-    return stackTrace.Contains(methodIdentity, StringComparison.Ordinal);
-  }
-
 }

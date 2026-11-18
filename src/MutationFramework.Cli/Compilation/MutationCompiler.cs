@@ -1,4 +1,5 @@
 using System.Diagnostics;
+
 using Microsoft.CodeAnalysis;
 
 namespace MutationFramework.Sdk;
@@ -20,6 +21,7 @@ internal sealed class MutationCompiler(MutationOptions options, ArtifactCache ca
     var appCopy = workspace.AppDirectory;
     var workspaceCopy = workspace.Root;
     var solutionRoot = workspace.SolutionRoot;
+    var sourceMappings = MutationWorkspace.CreateSourceMappings(projects, workspace);
     var compilationSourceSnapshot = BuildInputs.SnapshotCompilationSources(workspaceCopy);
     var compileRejected = new List<MutationResult>();
     var timer = Stopwatch.StartNew();
@@ -49,7 +51,11 @@ internal sealed class MutationCompiler(MutationOptions options, ArtifactCache ca
         var testEvaluation = testEvaluations[testIndex];
         var framework = opt.TargetFramework ?? testEvaluation.TargetFramework;
         var buildArgs = new List<string> { "build", clonedTest, "-c", "Debug", "--no-restore", "--nologo", "-v:q" };
-        if (!string.IsNullOrWhiteSpace(framework)) { buildArgs.Add("-f"); buildArgs.Add(framework); }
+        if (!string.IsNullOrWhiteSpace(framework))
+        {
+          buildArgs.Add("-f");
+          buildArgs.Add(framework);
+        }
         var originalTargetPath = CompilationWorkspace.ResolveEvaluatedTargetPath(testEvaluation, tests[testIndex], framework);
         var relativeTargetPath = Path.GetRelativePath(Path.GetDirectoryName(tests[testIndex])!, originalTargetPath);
         var clonedTargetPath = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(clonedTest)!, relativeTargetPath));
@@ -79,7 +85,7 @@ internal sealed class MutationCompiler(MutationOptions options, ArtifactCache ca
             : await ProcessRunner.RunProcess("dotnet", buildArgs, session, null, opt.TimeoutSeconds, metrics, ct);
         if (build.ExitCode != 0)
         {
-          var invalidCandidates = MutationSchemaBuilder.FindInvalidCandidates(build.Output, candidates, appCopy);
+          var invalidCandidates = MutationSchemaBuilder.FindInvalidCandidates(build.Output, candidates, appCopy, sourceMappings);
           if (invalidCandidates.Count == 0 || recoveryPasses >= 2)
           {
             throw new InvalidOperationException("Mutation-enabled project build failed without a safely attributable candidate, or the bounded recovery limit was reached. " + build.Output);
@@ -99,9 +105,10 @@ internal sealed class MutationCompiler(MutationOptions options, ArtifactCache ca
             File.Copy(pair.Key, pair.Value, true);
           }
 
-          MutationSchemaBuilder.RewriteSources(mappedFiles, candidates, Path.GetDirectoryName(app)!, workspaceCopy, evaluation.ParseOptionsByFile);
-          MutationRuntimeSource.WriteRuntimeSources(workspaceCopy, solutionRoot, evaluation.ProjectPaths, candidates);
-          recoveryTimer.Stop(); recoveryInstrumentationMs += recoveryTimer.ElapsedMilliseconds;
+          MutationWorkspace.RewriteWorkspaceSources(mappedFiles, candidates, app, workspaceCopy, solutionRoot, evaluation);
+          MutationRuntimeSource.WriteRuntimeSources(workspaceCopy, solutionRoot, evaluation.SourceOwnership.Select(owner => owner.Project).ToArray(), candidates);
+          recoveryTimer.Stop();
+          recoveryInstrumentationMs += recoveryTimer.ElapsedMilliseconds;
           recoveryPasses++;
           retryBuild = true;
           break;
@@ -137,7 +144,6 @@ internal sealed class MutationCompiler(MutationOptions options, ArtifactCache ca
         }
       }
     }
-
 
     return new(testDlls, compileRejected, buildMs, recoveryInstrumentationMs);
   }

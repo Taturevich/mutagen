@@ -7,8 +7,14 @@ internal sealed class MutationWorker : IDisposable
 {
   private readonly string _consolePath;
   private readonly RunMetrics _metrics;
-  internal TestPlatformSession Session { get; private set; }
-  internal long InitializationMs { get; private set; }
+  internal TestPlatformSession Session
+  {
+    get; private set;
+  }
+  internal long InitializationMs
+  {
+    get; private set;
+  }
 
   internal MutationWorker(string consolePath, RunMetrics metrics)
   {

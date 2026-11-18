@@ -1,4 +1,5 @@
 using System.Xml.Linq;
+
 using Microsoft.CodeAnalysis;
 
 namespace MutationFramework.Sdk;
@@ -197,7 +198,10 @@ internal static class MutationWorkspace
     }
 
     XDocument document;
-    try { document = XDocument.Load(path); }
+    try
+    {
+      document = XDocument.Load(path);
+    }
     catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Xml.XmlException)
     {
       return;
@@ -286,8 +290,6 @@ internal static class MutationWorkspace
         yield return current.FullName;
       }
     }
-
-
   }
 
   internal static (int Files, long Bytes) CopyProject(string from, string to)
@@ -326,6 +328,67 @@ internal static class MutationWorkspace
     return (copiedFiles, copiedBytes);
   }
 
+  internal static Dictionary<string, CandidateSourceLocation> CreateSourceMappings(MutationProjects projects, PreparedWorkspace workspace)
+  {
+    var projectDirectory = Path.GetDirectoryName(projects.App)!;
+    var mappings = workspace.Sources.ToDictionary(pair => Path.GetFullPath(pair.Value),
+        pair => new CandidateSourceLocation(Path.GetRelativePath(projectDirectory, pair.Key).Replace('\\', '/'), null), StringComparer.OrdinalIgnoreCase);
+    var shared = projects.Production.SourceOwnership.SelectMany(owner => owner.Files.Select(file => (File: file, Owner: owner)))
+        .GroupBy(pair => pair.File, StringComparer.OrdinalIgnoreCase).Where(group => group.Count() > 1);
+    foreach (var group in shared)
+    {
+      foreach (var (_, owner) in group)
+      {
+        mappings[OwnedSourcePath(workspace.Root, workspace.SolutionRoot, owner.Project, group.Key)] =
+            new(Path.GetRelativePath(projectDirectory, group.Key).Replace('\\', '/'), owner.Project);
+      }
+    }
+    return mappings;
+  }
+
+  private static string OwnedSourcePath(string workspaceCopy, string solutionRoot, string project, string source) =>
+      Path.Combine(Path.GetDirectoryName(Path.Combine(workspaceCopy, Path.GetRelativePath(solutionRoot, project)))!,
+          "obj", "MutagenOwned", CacheIdentity.Hash(source) + ".cs");
+
+  internal static void RewriteWorkspaceSources(Dictionary<string, string> mappedFiles, List<Candidate> candidates,
+      string app, string workspaceCopy, string solutionRoot, ProjectEvaluation evaluation)
+  {
+    var shared = evaluation.SourceOwnership.SelectMany(owner => owner.Files.Select(file => (File: file, Owner: owner)))
+        .GroupBy(pair => pair.File, StringComparer.OrdinalIgnoreCase).Where(group => group.Count() > 1).ToArray();
+    var sharedPaths = shared.Select(group => group.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    MutationSchemaBuilder.RewriteSources(mappedFiles.Where(pair => !sharedPaths.Contains(pair.Key))
+        .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase), candidates,
+        Path.GetDirectoryName(app)!, workspaceCopy, evaluation.ParseOptionsByFile);
+    foreach (var source in shared)
+    {
+      foreach (var (_, owner) in source)
+      {
+        var clonedProject = Path.Combine(workspaceCopy, Path.GetRelativePath(solutionRoot, owner.Project));
+        var target = OwnedSourcePath(workspaceCopy, solutionRoot, owner.Project, source.Key);
+        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+        File.Copy(source.Key, target, overwrite: true);
+        var local = candidates.Where(candidate => string.Equals(candidate.OwnerProject, owner.Project, StringComparison.OrdinalIgnoreCase)).ToList();
+        MutationSchemaBuilder.RewriteSources(new()
+        {
+          [source.Key] = target
+        }, local, Path.GetDirectoryName(app)!, workspaceCopy,
+            new Dictionary<string, Microsoft.CodeAnalysis.CSharp.CSharpParseOptions> { [source.Key] = owner.ParseOptions });
+        var document = XDocument.Load(clonedProject, LoadOptions.PreserveWhitespace);
+        var ns = document.Root!.Name.Namespace;
+        var targetName = "MutagenOwned" + CacheIdentity.Hash(source.Key)[..16];
+        if (!document.Root.Elements(ns + "Target").Any(element => (string?)element.Attribute("Name") == targetName))
+        {
+          document.Root.Add(new XElement(ns + "Target", new XAttribute("Name", targetName), new XAttribute("BeforeTargets", "CoreCompile"),
+              new XElement(ns + "ItemGroup",
+                  new XElement(ns + "Compile", new XAttribute("Remove", "@(Compile)"),
+                      new XAttribute("Condition", $"'%(Compile.FullPath)' == '{Path.GetFullPath(mappedFiles[source.Key])}' Or '%(Compile.FullPath)' == '{Path.GetFullPath(Path.Combine(workspaceCopy, Path.GetRelativePath(solutionRoot, source.Key)))}'")),
+                  new XElement(ns + "Compile", new XAttribute("Include", target)))));
+          document.Save(clonedProject, SaveOptions.DisableFormatting);
+        }
+      }
+    }
+  }
+
   internal static PreparedWorkspace Prepare(MutationProjects projects, List<Candidate> candidates,
       string session, List<string> diagnostics)
   {
@@ -359,12 +422,23 @@ internal static class MutationWorkspace
     {
       mappedFiles[original] = mapped;
     }
-    MutationSchemaBuilder.RewriteSources(mappedFiles, candidates, Path.GetDirectoryName(app)!, workspaceCopy, evaluation.ParseOptionsByFile);
-    MutationRuntimeSource.WriteRuntimeSources(workspaceCopy, solutionRoot, evaluation.ProjectPaths, candidates);
+    RewriteWorkspaceSources(mappedFiles, candidates, app, workspaceCopy, solutionRoot, evaluation);
+    // Schemata intentionally preserve source line layout for diagnostics and mutation IDs.
+    // Formatting diagnostics apply to original code, not to generated dispatch text.
+    var sharedOwners = evaluation.SourceOwnership.SelectMany(owner => owner.Files.Select(file => (File: file, Owner: owner)))
+        .GroupBy(pair => pair.File, StringComparer.OrdinalIgnoreCase).Where(group => group.Count() > 1);
+    var formattingPaths = mappedFiles.Values.Concat(sharedOwners.SelectMany(group => group.Select(pair =>
+        OwnedSourcePath(workspaceCopy, solutionRoot, pair.Owner.Project, group.Key))));
+    foreach (var directory in formattingPaths.Distinct(StringComparer.OrdinalIgnoreCase).GroupBy(path => Path.GetDirectoryName(path)!, StringComparer.OrdinalIgnoreCase))
+    {
+      var config = Path.Combine(directory.Key, ".editorconfig");
+      var sections = string.Join("\n", directory.Select(path => $"[{Path.GetFileName(path)}]\ndotnet_diagnostic.IDE0055.severity = none\n"));
+      File.AppendAllText(config, "\n# Generated mutation schemata retain original source line positions.\n" + sections);
+    }
+    MutationRuntimeSource.WriteRuntimeSources(workspaceCopy, solutionRoot, evaluation.SourceOwnership.Select(owner => owner.Project).ToArray(), candidates);
     var instrumentationMs = timer.ElapsedMilliseconds;
     return new(session, workspaceCopy, solutionRoot, appCopy, clonedTests, mappedFiles, copyMs, instrumentationMs);
   }
-
 }
 
 internal sealed record PreparedWorkspace(string Session, string Root, string SolutionRoot, string AppDirectory,

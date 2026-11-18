@@ -1,4 +1,5 @@
 using System.Diagnostics;
+
 using Microsoft.VisualStudio.TestPlatform.ObjectModel;
 
 namespace MutationFramework.Sdk;

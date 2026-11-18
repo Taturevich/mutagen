@@ -7,11 +7,14 @@ internal static class Engine
   public static async Task<MutationRunResult> RunAsync(MutationOptions opt, bool executeMutants, CancellationToken ct)
   {
     var (app, tests) = MutationOptionsValidator.ValidateForRun(opt);
-    var output = Path.GetFullPath(opt.OutputDirectory); Directory.CreateDirectory(output);
-    var sw = Stopwatch.StartNew(); var diagnostics = new List<string>();
+    var output = Path.GetFullPath(opt.OutputDirectory);
+    Directory.CreateDirectory(output);
+    var sw = Stopwatch.StartNew();
+    var diagnostics = new List<string>();
     var unsupportedMutations = new List<MutationResult>();
     var metrics = new RunMetrics();
-    var session = Path.Combine(Path.GetTempPath(), "mutation-framework", Guid.NewGuid().ToString("N")); Directory.CreateDirectory(session);
+    var session = Path.Combine(Path.GetTempPath(), "mutation-framework", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(session);
     try
     {
       var timer = Stopwatch.StartNew();
@@ -22,10 +25,12 @@ internal static class Engine
       {
         testEvaluations.Add(await CompilationWorkspace.GetProjectGraph(test, metrics, ct, opt.TargetFramework, cache, diagnostics));
       }
+      var semanticCompilations = await ProjectSemanticCompilations.LoadAsync(app, evaluation, cache, diagnostics, ct, metrics);
+      evaluation = ProjectSemanticCompilations.ApplyInputs(evaluation, semanticCompilations);
       var projects = new MutationProjects(app, tests, evaluation, testEvaluations);
       var sourceFiles = evaluation.CompileFiles;
       var evaluationMs = timer.ElapsedMilliseconds;
-      var candidates = await MutationDiscovery.DiscoverCandidatesCached(sourceFiles, app, opt, diagnostics, ct, unsupportedMutations, evaluation, cache);
+      var candidates = await MutationDiscovery.DiscoverCandidatesCached(sourceFiles, app, opt, diagnostics, ct, unsupportedMutations, evaluation, cache, semanticCompilations, metrics);
       var generationMs = timer.ElapsedMilliseconds - evaluationMs;
       var workspace = MutationWorkspace.Prepare(projects, candidates, session, diagnostics);
       var compilation = await new MutationCompiler(opt, cache, diagnostics, metrics).CompileAsync(projects, workspace, candidates, ct);
@@ -42,6 +47,7 @@ internal static class Engine
       var timings = new PhaseTimings(baseline.DiscoveryMs, compilation.BuildMs, baseline.BaselineMs, baseline.CoverageMs,
           generationMs, execution.ExecutionMs, 0)
       {
+        SemanticAnalysisMs = metrics.SemanticAnalysisMs,
         ProbeSerializationMs = baseline.ProbeSerializationMs,
         CoverageMappingMs = baseline.CoverageMappingMs,
         ProjectEvaluationMs = evaluationMs,
@@ -59,7 +65,10 @@ internal static class Engine
     finally
     {
       // A terminated host may briefly retain a file handle; cleanup failure must not hide run results.
-      try { Directory.Delete(session, true); }
+      try
+      {
+        Directory.Delete(session, true);
+      }
       catch (IOException) { }
       catch (UnauthorizedAccessException) { }
     }

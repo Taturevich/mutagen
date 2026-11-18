@@ -1,10 +1,10 @@
 using System.Text.Json;
+
 using Microsoft.CodeAnalysis;
 
 namespace MutationFramework.Sdk;
 
 internal sealed record CachedMutationExecutionResult(MutationResult Result, string IntegrityHash);
-
 
 internal static class MutationResultCache
 {
@@ -209,7 +209,6 @@ internal static class MutationResultCache
         }
       }
     }
-
 
     return new(cache, Path.GetFullPath(app) + "|" + (opt.TargetFramework ?? "default") + "|", mutationResultCacheKeys, restored);
   }

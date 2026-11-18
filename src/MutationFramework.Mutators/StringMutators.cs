@@ -6,9 +6,14 @@ namespace MutationFramework.Sdk;
 
 internal sealed class StringConstantMutator : IMutator<InvocationExpressionSyntax>
 {
-  public MutatorMetadata Metadata { get; } = new("string-method-constants", 1, MutationCategory.StringMethods,
+  public MutatorMetadata Metadata
+  {
+    get;
+  } = new("string-method-constants", 1, MutationCategory.StringMethods,
       new HashSet<string>(["Substring", "Trim", "ElementAt", "ElementAtOrDefault"], StringComparer.Ordinal))
-  { Categories = new HashSet<MutationCategory>([MutationCategory.StringMethods]) };
+  {
+    Categories = new HashSet<MutationCategory>([MutationCategory.StringMethods])
+  };
 
   public IEnumerable<MutationDescription> Generate(InvocationExpressionSyntax node, SemanticModel model,
       Func<ExpressionSyntax, SemanticModel, (bool Supported, string? Reason)> validate)
@@ -32,7 +37,6 @@ internal sealed class StringConstantMutator : IMutator<InvocationExpressionSynta
   }
 }
 
-
 internal sealed class StringValueMutator : IMutator<LiteralExpressionSyntax>, IMutator<InterpolatedStringExpressionSyntax>, IMutator<MemberAccessExpressionSyntax>, IMutator<InvocationExpressionSyntax>
 {
   private static readonly Dictionary<string, string[]> NullChecks = new(StringComparer.Ordinal)
@@ -40,9 +44,14 @@ internal sealed class StringValueMutator : IMutator<LiteralExpressionSyntax>, IM
     ["IsNullOrEmpty"] = ["{0} != null", "{0} != \"\""],
     ["IsNullOrWhiteSpace"] = ["{0} != null", "{0} != \"\"", "{0}.Trim() != \"\""]
   };
-  public MutatorMetadata Metadata { get; } = new("string-values", 1, MutationCategory.String,
+  public MutatorMetadata Metadata
+  {
+    get;
+  } = new("string-values", 1, MutationCategory.String,
       new HashSet<string>(["string literals", "interpolated strings", "string.Empty", "null/empty checks"], StringComparer.Ordinal))
-  { Categories = new HashSet<MutationCategory>([MutationCategory.String]) };
+  {
+    Categories = new HashSet<MutationCategory>([MutationCategory.String])
+  };
 
   IEnumerable<MutationDescription> IMutator.Generate(SyntaxNode node, SemanticModel model,
       Func<ExpressionSyntax, SemanticModel, (bool Supported, string? Reason)> validate) => node switch

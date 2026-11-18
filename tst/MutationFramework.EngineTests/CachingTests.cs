@@ -1,10 +1,13 @@
-using MutationFramework.Sdk;
-using NUnit.Framework;
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+
+using MutationFramework.Sdk;
+
+using NUnit.Framework;
 
 namespace MutationFramework.EngineTests;
 
@@ -13,6 +16,65 @@ using static MutationFramework.EngineTests.TestWorkspace;
 [TestFixture]
 public sealed class CachingTests
 {
+  [TestCase(false)]
+  [TestCase(true)]
+  [Category("Component")]
+  public async Task SemanticAndCandidateCachesInvalidateWhenOnlyAReferencedTypeChanges(bool externalReference)
+  {
+    var directory = NewOutputDirectory();
+    Directory.CreateDirectory(Path.Combine(directory, "Product"));
+    Directory.CreateDirectory(Path.Combine(directory, "Dependency"));
+    try
+    {
+      var project = Path.Combine(directory, "Product", "Product.csproj");
+      var dependency = Path.Combine(directory, "Dependency", "Dependency.csproj");
+      var dependencySource = Path.Combine(directory, "Dependency", "Dependency.cs");
+      File.WriteAllText(dependency, "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net11.0</TargetFramework></PropertyGroup></Project>");
+      File.WriteAllText(dependencySource, "public static class Dependency { public static bool Value => true; }");
+      var referenceXml = externalReference
+          ? "<Reference Include=\"Dependency\"><HintPath>../External/Dependency.dll</HintPath></Reference>"
+          : "<ProjectReference Include=\"../Dependency/Dependency.csproj\" />";
+      File.WriteAllText(project, "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net11.0</TargetFramework></PropertyGroup><ItemGroup>" + referenceXml + "</ItemGroup></Project>");
+      async Task RefreshExternalReference()
+      {
+        if (!externalReference)
+        {
+          return;
+        }
+        var build = await ProcessRunner.RunProcess("dotnet", ["build", dependency, "--nologo", "-v:q"], directory, null, 60, new RunMetrics(), CancellationToken.None);
+        Assert.That(build.ExitCode, Is.Zero, build.Output);
+        var external = Path.Combine(directory, "External");
+        Directory.CreateDirectory(external);
+        File.Copy(Path.Combine(directory, "Dependency", "bin", "Debug", "net11.0", "Dependency.dll"), Path.Combine(external, "Dependency.dll"), overwrite: true);
+      }
+      await RefreshExternalReference();
+      File.WriteAllText(Path.Combine(directory, "Product", "Product.cs"), "public static class Product { public static object Compute() => Dependency.Value ^ Dependency.Value; }");
+      var cache = new ArtifactCache(Path.Combine(directory, "cache"));
+      var diagnostics = new List<string>();
+      var options = new MutationOptions { ProjectPath = project, TestProjects = [], Mutators = new HashSet<string>(["binary-operators"]) };
+      async Task<List<Candidate>> Discover()
+      {
+        var evaluation = await CompilationWorkspace.GetProductionGraph(project, [], new RunMetrics(), CancellationToken.None, null, cache, diagnostics);
+        return await MutationDiscovery.DiscoverCandidatesCached(evaluation.CompileFiles, project, options, diagnostics, CancellationToken.None, [], evaluation, cache);
+      }
+      var first = await Discover();
+      Assert.That(first.Single().ReplacementToken, Is.EqualTo("=="));
+      diagnostics.Clear();
+      var cached = await Discover();
+      Assert.That(cached.Single().Id, Is.EqualTo(first.Single().Id));
+      Assert.That(diagnostics.Any(message => message.StartsWith("CacheHit: semantic-compilation", StringComparison.Ordinal)), Is.True);
+      Assert.That(diagnostics.Any(message => message.StartsWith("CacheHit: mutation-discovery", StringComparison.Ordinal)), Is.True);
+      File.WriteAllText(dependencySource, "public static class Dependency { public static int Value => 1; }");
+      await RefreshExternalReference();
+      diagnostics.Clear();
+      var changed = await Discover();
+      Assert.That(changed.Single().ReplacementToken, Is.EqualTo("~^"));
+      Assert.That(diagnostics.Any(message => message.StartsWith("CacheInvalidated: semantic-compilation", StringComparison.Ordinal)), Is.True);
+      Assert.That(diagnostics.Any(message => message.StartsWith("CacheInvalidated: mutation-discovery", StringComparison.Ordinal)), Is.True);
+    }
+    finally { Directory.Delete(directory, true); }
+  }
+
   [Test]
   [Category("Component")]
   public async Task ArtifactCacheHitsIdenticalInputsAndInvalidatesChangedContent()
@@ -339,7 +401,7 @@ public sealed class CachingTests
     {
       var project = Path.Combine(root, "Product.csproj");
       var source = Path.Combine(root, "Product.cs");
-      File.WriteAllText(project, "<Project />");
+      File.WriteAllText(project, "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net11.0</TargetFramework></PropertyGroup></Project>");
       File.WriteAllText(source, "public static class Product { public static int Evaluate(int value) => value + 1; }");
       var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
       var evaluation = new ProjectEvaluation([source], parseOptions, "net11.0", "Product", [], [project],
@@ -722,7 +784,7 @@ public sealed class CachingTests
     {
       var project = Path.Combine(root, "Fixture.csproj");
       var source = Path.Combine(root, "Fixture.cs");
-      File.WriteAllText(project, "<Project><PropertyGroup><TargetFramework>net11.0</TargetFramework><AssemblyName>Fixture</AssemblyName></PropertyGroup><ItemGroup><Compile Include=\"Fixture.cs\" /></ItemGroup></Project>");
+      File.WriteAllText(project, "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><EnableDefaultCompileItems>false</EnableDefaultCompileItems><TargetFramework>net11.0</TargetFramework><AssemblyName>Fixture</AssemblyName></PropertyGroup><ItemGroup><Compile Include=\"Fixture.cs\" /></ItemGroup></Project>");
       File.WriteAllText(source, "public class Fixture { public int Value => 1 + 2; }");
       var cache = new ArtifactCache(Path.Combine(root, ".mutagen-cache"));
       var metrics = new RunMetrics();
@@ -734,7 +796,7 @@ public sealed class CachingTests
       diagnostics.Clear();
       await CompilationWorkspace.GetCompileFiles(project, metrics, CancellationToken.None, cache: cache, diagnostics: diagnostics);
       Assert.That(diagnostics.Any(message => message.StartsWith("CacheHit: project-evaluation", StringComparison.Ordinal)), Is.True);
-      File.WriteAllText(project, "<Project><PropertyGroup><TargetFramework>net11.0</TargetFramework><AssemblyName>Fixture</AssemblyName><DefineConstants>FEATURE_CHANGED</DefineConstants></PropertyGroup><ItemGroup><Compile Include=\"Fixture.cs\" /></ItemGroup></Project>");
+      File.WriteAllText(project, "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><EnableDefaultCompileItems>false</EnableDefaultCompileItems><TargetFramework>net11.0</TargetFramework><AssemblyName>Fixture</AssemblyName><DefineConstants>FEATURE_CHANGED</DefineConstants></PropertyGroup><ItemGroup><Compile Include=\"Fixture.cs\" /></ItemGroup></Project>");
       diagnostics.Clear();
       var changed = await CompilationWorkspace.GetCompileFiles(project, metrics, CancellationToken.None, cache: cache, diagnostics: diagnostics);
       Assert.That(changed.ParseOptions.PreprocessorSymbolNames, Does.Contain("FEATURE_CHANGED"));
@@ -896,5 +958,4 @@ public sealed class CachingTests
       }
     }
   }
-
 }

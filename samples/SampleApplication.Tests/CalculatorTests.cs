@@ -10,6 +10,7 @@ public sealed class CalculatorTests
   {
     var marker = Environment.GetEnvironmentVariable("MUTAGEN_COVERAGE_BASELINE_MARKER");
     if (!string.IsNullOrWhiteSpace(marker) &&
+        string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("MUTATION_ACTIVE_ID")) &&
         (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("MUTATION_PROBE_FILE")) ||
          Environment.GetEnvironmentVariable("MUTATION_PER_TEST_COVERAGE") == "1"))
     {

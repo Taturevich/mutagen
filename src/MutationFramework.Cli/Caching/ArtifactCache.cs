@@ -1,8 +1,8 @@
+using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Buffers.Binary;
 
 namespace MutationFramework.Sdk;
 
@@ -177,7 +177,6 @@ internal sealed class ArtifactCache(string root)
     }
     return Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
   }
-
 
   private static async Task<string> ReadSharedTextAsync(string path, CancellationToken cancellationToken)
   {

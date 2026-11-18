@@ -1,14 +1,13 @@
 using System.Diagnostics;
 using System.Text.Json;
+
 using Microsoft.CodeAnalysis;
 
 namespace MutationFramework.Sdk;
 
 internal sealed record CachedCompilationArtifacts(CachedCompilationFile[] Files, string IntegrityHash);
 
-
 internal sealed record CachedCompilationFile(string RelativePath, string BlobKey);
-
 
 internal static class CompilationArtifactCache
 {
@@ -117,6 +116,7 @@ internal static class CompilationArtifactCache
       "compilation-artifacts-v1", Path.GetFullPath(project), evaluation.AssemblyName, targetFramework ?? string.Empty,
       "Configuration=Debug", CacheIdentity.EnvironmentFingerprint(), CacheIdentity.EngineVersion(),
       string.Join(";", evaluation.ProjectPaths.Order(StringComparer.OrdinalIgnoreCase)),
+      string.Join(";", evaluation.TargetFrameworksByProject.OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase).Select(pair => pair.Key + "=" + pair.Value)),
       string.Join(";", evaluation.ParseOptionsByFile.OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
           .Select(pair => pair.Key + "=" + pair.Value.LanguageVersion + ":" + string.Join(",", pair.Value.PreprocessorSymbolNames.Order(StringComparer.Ordinal))))
     };

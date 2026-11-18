@@ -1,6 +1,8 @@
-using MutationFramework.Sdk;
-using NUnit.Framework;
 using Microsoft.CodeAnalysis;
+
+using MutationFramework.Sdk;
+
+using NUnit.Framework;
 
 namespace MutationFramework.EngineTests;
 
@@ -9,6 +11,92 @@ using static MutationFramework.EngineTests.TestWorkspace;
 [TestFixture]
 public sealed class SchedulingTests
 {
+  [Test]
+  [Category("Component")]
+  public void ThousandTestCoverageAndASparseHubRemainExactAndConflictSafe()
+  {
+    var broadTests = Enumerable.Range(0, 1000).Select(index => $"T{index}").ToArray();
+    var broad = Enumerable.Range(0, 512).Select(index => new MutationWorkItem($"M{index:D6}", broadTests, 1)).ToArray();
+    var broadPlan = MutationPlanner.Build(broad, [], MutationExecutionMode.Batched, true, 30, 4);
+    Assert.That(broadPlan.Statistics.ExactConflictEdges, Is.EqualTo(512L * 511 / 2));
+    Assert.That(broadPlan.Batches, Has.Count.EqualTo(512));
+    Assert.That(broadPlan.Batches.All(batch => batch.MutantIds.Count == 1), Is.True);
+
+    var hub = Enumerable.Range(0, 1000).Select(index => new MutationWorkItem($"M{index:D6}",
+        index < 100 ? [$"T{index}", "hub"] : [$"T{index}"], 1)).ToArray();
+    var hubPlan = MutationPlanner.Build(hub, [], MutationExecutionMode.Batched, true, 30, 4);
+    Assert.That(hubPlan.Statistics.ExactConflictEdges, Is.EqualTo(4950));
+    Assert.That(hubPlan.Batches.SelectMany(batch => batch.MutantIds).Distinct().Count(), Is.EqualTo(hub.Length));
+    foreach (var batch in hubPlan.Batches)
+    {
+      var tests = batch.MutantIds.SelectMany(id => hub[int.Parse(id.AsSpan(1))].TestIds).ToArray();
+      Assert.That(tests.Distinct().Count(), Is.EqualTo(tests.Length));
+    }
+  }
+
+  [Test]
+  [Category("Component")]
+  public void HundredThousandDenseMutantsRetainAnExactWideConflictCount()
+  {
+    var items = Enumerable.Range(0, 100000).Select(index => new MutationWorkItem($"M{index:D6}", ["integration-test"], 1)).ToArray();
+    var plan = MutationPlanner.Build(items, [], MutationExecutionMode.Batched, true, 30, 4);
+    Assert.That(plan.Statistics.ExactConflictEdges, Is.EqualTo(4_999_950_000L));
+    Assert.That(plan.Statistics.ConflictEdges, Is.EqualTo(int.MaxValue));
+    Assert.That(plan.Statistics.ConflictEdgesOverflow, Is.True);
+    Assert.That(plan.Batches.Count, Is.EqualTo(100000));
+  }
+
+  [Test]
+  [Category("Component")]
+  public void DenseTenThousandMutantPlanIsExactDeterministicAndBounded()
+  {
+    var items = Enumerable.Range(0, 10000).Select(index => new MutationWorkItem($"M{index:D6}", ["integration-test"], 1)).ToArray();
+    var allocated = GC.GetAllocatedBytesForCurrentThread();
+    var timer = System.Diagnostics.Stopwatch.StartNew();
+    var first = MutationPlanner.Build(items, [], MutationExecutionMode.Batched, true, 30, 4);
+    var bytes = GC.GetAllocatedBytesForCurrentThread() - allocated;
+    Assert.That(first.Statistics.ExactConflictEdges, Is.EqualTo(49995000));
+    Assert.That(first.Statistics.ConflictEdges, Is.EqualTo(49995000));
+    Assert.That(first.Batches, Has.Count.EqualTo(10000));
+    Assert.That(first.Batches.All(batch => batch.MutantIds.Count == 1), Is.True);
+    Assert.That(first.Batches.SelectMany(batch => batch.MutantIds).Distinct().Count(), Is.EqualTo(10000));
+    Assert.That(bytes, Is.LessThan(100_000_000), "Planner allocation must not grow with pairwise edge count.");
+    Assert.That(timer.Elapsed, Is.LessThan(TimeSpan.FromSeconds(15)));
+    var second = MutationPlanner.Build(items.Reverse().ToArray(), [], MutationExecutionMode.Batched, true, 30, 4);
+    Assert.That(second.Batches.Select(batch => string.Join(",", batch.MutantIds)),
+        Is.EqualTo(first.Batches.Select(batch => string.Join(",", batch.MutantIds))));
+  }
+
+  [Test]
+  [Category("Unit")]
+  public void CompactConflictCountsMatchPairwiseOracleForRandomOverlaps()
+  {
+    var random = new Random(1729);
+    for (var iteration = 0; iteration < 20; iteration++)
+    {
+      var items = Enumerable.Range(0, 100).Select(index => new MutationWorkItem($"M{index}",
+          Enumerable.Range(0, 40).Where(_ => random.Next(10) == 0).Select(test => $"T{test}").ToArray(), 1)).ToArray();
+      long expected = 0;
+      for (var left = 0; left < items.Length; left++)
+      {
+        for (var right = left + 1; right < items.Length; right++)
+        {
+          if (items[left].TestIds.Intersect(items[right].TestIds).Any())
+          {
+            expected++;
+          }
+        }
+      }
+      Assert.That(MutationPlanner.CountConflictEdges(items), Is.EqualTo(expected));
+      var plan = MutationPlanner.Build(items, [], MutationExecutionMode.Batched, true, 30, 4);
+      foreach (var batch in plan.Batches)
+      {
+        var tests = batch.MutantIds.SelectMany(id => items.Single(item => item.MutantId == id).TestIds).ToArray();
+        Assert.That(tests.Distinct().Count(), Is.EqualTo(tests.Length));
+      }
+    }
+  }
+
   [Test]
   [Category("Unit")]
   public void ResourceLockConfigurationMustNameDiscoveredTestsAndResources()
@@ -55,7 +143,8 @@ public sealed class SchedulingTests
         int observed;
         do
         {
-          observed = Volatile.Read(ref peak); if (observed >= now)
+          observed = Volatile.Read(ref peak);
+          if (observed >= now)
           {
             break;
           }
@@ -264,5 +353,4 @@ public sealed class SchedulingTests
       }
     }
   }
-
 }

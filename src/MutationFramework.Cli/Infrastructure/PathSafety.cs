@@ -7,5 +7,4 @@ internal static class PathSafety
     var relative = Path.GetRelativePath(Path.GetFullPath(directory), Path.GetFullPath(path));
     return relative == "." || (!Path.IsPathRooted(relative) && relative != ".." && !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal));
   }
-
 }

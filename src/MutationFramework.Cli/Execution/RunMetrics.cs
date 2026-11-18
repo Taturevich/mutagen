@@ -2,6 +2,7 @@ namespace MutationFramework.Sdk;
 
 internal sealed class RunMetrics
 {
+  public long SemanticAnalysisMs;
   public int ProcessStarts, TestRunnerStarts, TestHostStarts, BuildInvocations, DiscoveryOperations, BaselineTests, MutationTests, WorkerRestarts, WorkerFailures;
   public void StartedProcess(string exe, IReadOnlyList<string> args)
   {
@@ -13,7 +14,7 @@ internal sealed class RunMetrics
         Interlocked.Increment(ref TestRunnerStarts);
       }
 
-      if (args.Contains("build", StringComparer.OrdinalIgnoreCase))
+      if (args.Contains("build", StringComparer.OrdinalIgnoreCase) || args.Contains("-t:Rebuild", StringComparer.OrdinalIgnoreCase))
       {
         Interlocked.Increment(ref BuildInvocations);
       }
@@ -24,6 +25,14 @@ internal sealed class RunMetrics
       }
     }
   }
-  public void StartedTestRunner() { Interlocked.Increment(ref ProcessStarts); Interlocked.Increment(ref TestRunnerStarts); }
-  public void StartedTestHost(int count = 1) { Interlocked.Add(ref ProcessStarts, count); Interlocked.Add(ref TestHostStarts, count); }
+  public void StartedTestRunner()
+  {
+    Interlocked.Increment(ref ProcessStarts);
+    Interlocked.Increment(ref TestRunnerStarts);
+  }
+  public void StartedTestHost(int count = 1)
+  {
+    Interlocked.Add(ref ProcessStarts, count);
+    Interlocked.Add(ref TestHostStarts, count);
+  }
 }

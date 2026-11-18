@@ -1,0 +1,8 @@
+{
+    "status":  "Terminated after exceeding practical baseline time",
+    "elapsedSeconds":  3855.7954645,
+    "cpuSeconds":  3468.84375,
+    "peakWorkingSetBytes":  2421415936,
+    "workload":  "Unoptimized planner and rewrite stress through 10000 candidates",
+    "concurrentWork":  "Baseline correctness suite and focused builds/tests also ran; lower bound only"
+}

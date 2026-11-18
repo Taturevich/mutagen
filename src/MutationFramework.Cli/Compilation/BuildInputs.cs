@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
+
 using Microsoft.CodeAnalysis;
 
 namespace MutationFramework.Sdk;
@@ -35,7 +36,8 @@ internal static class BuildInputs
   internal static bool IsKnownSdkGeneratedCompileSource(string path)
   {
     var name = Path.GetFileName(path);
-    return name.EndsWith(".AssemblyAttributes.cs", StringComparison.OrdinalIgnoreCase) ||
+    return path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Contains("MutagenSemanticGenerated", StringComparer.OrdinalIgnoreCase) ||
+        name.EndsWith(".AssemblyAttributes.cs", StringComparison.OrdinalIgnoreCase) ||
         name.EndsWith(".AssemblyInfo.cs", StringComparison.OrdinalIgnoreCase) ||
         name.EndsWith(".GlobalUsings.g.cs", StringComparison.OrdinalIgnoreCase);
   }
@@ -51,7 +53,10 @@ internal static class BuildInputs
       }
 
       XDocument document;
-      try { document = XDocument.Load(path); }
+      try
+      {
+        document = XDocument.Load(path);
+      }
       catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Xml.XmlException)
       {
         return path;
@@ -307,7 +312,10 @@ internal static class BuildInputs
       }
 
       XDocument document;
-      try { document = XDocument.Load(importingFile); }
+      try
+      {
+        document = XDocument.Load(importingFile);
+      }
       catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Xml.XmlException)
       {
         unresolvedImport ??= $"cannot inspect imported file '{importingFile}': {exception.Message}";

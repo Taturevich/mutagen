@@ -7,7 +7,10 @@ namespace MutationFramework.Sdk;
 public sealed class MutatorRegistry
 {
   private readonly IReadOnlyList<IMutator> _mutators;
-  public string Fingerprint { get; }
+  public string Fingerprint
+  {
+    get;
+  }
 
   public MutatorRegistry(IEnumerable<IMutator> mutators, IReadOnlySet<string>? selectedIds = null)
   {

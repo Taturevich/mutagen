@@ -1,10 +1,10 @@
 using System.Text.Json;
+
 using Microsoft.CodeAnalysis;
 
 namespace MutationFramework.Sdk;
 
 internal sealed record CachedCoverageMap(string[] RuntimeSiteIds, string[] Sites, string IntegrityHash);
-
 
 internal sealed class CoverageMap
 {
@@ -96,7 +96,8 @@ internal sealed class CoverageMap
         throw new JsonException("Probe artifact is empty.");
       }
 
-      var values = new HashSet<int>(); long serializationMs = 0;
+      var values = new HashSet<int>();
+      long serializationMs = 0;
       foreach (var line in lines)
       {
         using (var document = JsonDocument.Parse(line))

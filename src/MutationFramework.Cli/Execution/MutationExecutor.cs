@@ -1,4 +1,5 @@
 using System.Diagnostics;
+
 using Microsoft.CodeAnalysis;
 
 namespace MutationFramework.Sdk;
@@ -75,7 +76,12 @@ internal static class MutationExecutor
           while (true)
           {
             var batchIndex = Interlocked.Increment(ref nextBatch);
-            if (batchIndex >= mutationWorkUnits.Length) { busy.Stop(); workerBusy[workerIndex] = busy.ElapsedMilliseconds; return; }
+            if (batchIndex >= mutationWorkUnits.Length)
+            {
+              busy.Stop();
+              workerBusy[workerIndex] = busy.ElapsedMilliseconds;
+              return;
+            }
             ct.ThrowIfCancellationRequested();
             var batch = mutationWorkUnits[batchIndex];
             if ((opt.TestHostIsolationPolicy is TestHostIsolationPolicy.PerBatch or TestHostIsolationPolicy.PerResourceGroup) &&
@@ -98,7 +104,8 @@ internal static class MutationExecutor
             foreach (var mutantId in batch.MutantIds)
             {
               ct.ThrowIfCancellationRequested();
-              var i = resultIndexById[mutantId]; var c = candidates[i];
+              var i = resultIndexById[mutantId];
+              var c = candidates[i];
               if (completed[i] is not null)
               {
                 continue;
@@ -124,7 +131,10 @@ internal static class MutationExecutor
         }
         finally { Interlocked.Add(ref workerInitializationMs, worker.InitializationMs); }
       }).ToArray();
-      try { await Task.WhenAll(workers); }
+      try
+      {
+        await Task.WhenAll(workers);
+      }
       catch (OperationCanceledException)
       {
         runCanceled = true;

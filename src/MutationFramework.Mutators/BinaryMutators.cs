@@ -23,7 +23,10 @@ internal sealed class AssignmentExpressionMutator : IMutator<AssignmentExpressio
         [SyntaxKind.UnsignedRightShiftAssignmentExpression] = [(SyntaxKind.LeftShiftAssignmentExpression, "<<="), (SyntaxKind.RightShiftAssignmentExpression, ">>=")]
       };
 
-  public MutatorMetadata Metadata { get; } = new("assignment-expressions", 1, MutationCategory.Assignment,
+  public MutatorMetadata Metadata
+  {
+    get;
+  } = new("assignment-expressions", 1, MutationCategory.Assignment,
       new HashSet<string>(["compound assignment", "coalescing assignment"], StringComparer.Ordinal))
   {
     Categories = new HashSet<MutationCategory>([MutationCategory.Assignment])
@@ -53,7 +56,6 @@ internal sealed class AssignmentExpressionMutator : IMutator<AssignmentExpressio
   }
 }
 
-
 internal sealed class BinaryOperatorMutator : IMutator<BinaryExpressionSyntax>
 {
   private static readonly IReadOnlyDictionary<SyntaxKind, (MutationCategory Category, SyntaxKind Replacement, bool Invert)[]> Operators =
@@ -79,7 +81,10 @@ internal sealed class BinaryOperatorMutator : IMutator<BinaryExpressionSyntax>
         [SyntaxKind.UnsignedRightShiftExpression] = [(MutationCategory.Bitwise, SyntaxKind.LeftShiftExpression, false), (MutationCategory.Bitwise, SyntaxKind.RightShiftExpression, false)]
       };
 
-  public MutatorMetadata Metadata { get; } = new("binary-operators", 1, MutationCategory.Arithmetic,
+  public MutatorMetadata Metadata
+  {
+    get;
+  } = new("binary-operators", 1, MutationCategory.Arithmetic,
       new HashSet<string>(["binary expressions", "arithmetic", "relational", "equality", "conditional logical", "bitwise", "shift"], StringComparer.Ordinal))
   {
     Categories = new HashSet<MutationCategory>([MutationCategory.Arithmetic, MutationCategory.Equality, MutationCategory.Logical, MutationCategory.Bitwise])
@@ -135,7 +140,10 @@ internal sealed class BinaryOperatorMutator : IMutator<BinaryExpressionSyntax>
       var replacement = invert
           ? $"~(({binary.Left}) ^ ({binary.Right}))"
           : SyntaxFactory.ParseExpression($"({binary.Left}) {token} ({binary.Right})").ToString();
-      yield return new(Metadata with { Category = category }, binary,
+      yield return new(Metadata with
+      {
+        Category = category
+      }, binary,
           replacement, token,
           binary.ToString(), validity.Supported ? null : validity.Reason);
     }

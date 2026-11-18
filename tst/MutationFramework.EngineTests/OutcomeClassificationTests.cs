@@ -1,4 +1,7 @@
+using Microsoft.VisualStudio.TestPlatform.ObjectModel;
+
 using MutationFramework.Sdk;
+
 using NUnit.Framework;
 
 namespace MutationFramework.EngineTests;
@@ -6,9 +9,38 @@ namespace MutationFramework.EngineTests;
 [TestFixture]
 public sealed class OutcomeClassificationTests
 {
+  [Test]
+  [Category("Unit")]
+  public void PostKillCancellationDistinguishesStartedAndUnstartedSelectedTests()
+  {
+    static TestCaseDescriptor Case(string name)
+    {
+      var native = new TestCase(name, new Uri("executor://unit"), "tests.dll");
+      return new(native, name, name, name, native.ExecutorUri.ToString(), "tests.dll");
+    }
+    var completed = Case("completed");
+    var started = Case("started");
+    var unstarted = Case("unstarted");
+    var results = TestResultClassifier.PartialResults([completed, started, unstarted],
+        [new TestResult(completed.Case) { Outcome = TestOutcome.Passed }], false,
+        startedTests: new HashSet<Guid> { completed.Case.Id, started.Case.Id });
+    Assert.Multiple(() =>
+    {
+      Assert.That(results[completed.Id].State, Is.EqualTo(TestExecutionState.Completed));
+      Assert.That(results[started.Id].State, Is.EqualTo(TestExecutionState.Canceled));
+      Assert.That(results[started.Id].FailureKind, Is.EqualTo(TestFailureKind.Bailed));
+      Assert.That(results[started.Id].ExecutionObserved, Is.True);
+      Assert.That(results[unstarted.Id].State, Is.EqualTo(TestExecutionState.NotExecuted));
+      Assert.That(results[unstarted.Id].ExecutionObserved, Is.False);
+      Assert.That(results.Values.Count(result => result.ExecutionObserved), Is.EqualTo(2));
+    });
+  }
+
   [TestCase((int)TestFailureKind.Infrastructure, MutationStatus.InfrastructureError)]
   [TestCase((int)TestFailureKind.Timeout, MutationStatus.Timeout)]
   [TestCase((int)TestFailureKind.Unattributed, MutationStatus.Inconclusive)]
+  [TestCase((int)TestFailureKind.Canceled, MutationStatus.Inconclusive)]
+  [TestCase((int)TestFailureKind.Bailed, MutationStatus.Inconclusive)]
   [TestCase((int)TestFailureKind.TestBody, MutationStatus.Killed)]
   [TestCase((int)TestFailureKind.None, MutationStatus.Survived)]
   [Category("Unit")]

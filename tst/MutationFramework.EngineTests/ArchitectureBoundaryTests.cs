@@ -1,11 +1,15 @@
-using static MutationFramework.EngineTests.TestWorkspace;
 using System.Reflection;
 using System.Xml.Linq;
+
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+
 using MutationFramework.CoverageCollector;
 using MutationFramework.Sdk;
+
 using NUnit.Framework;
+
+using static MutationFramework.EngineTests.TestWorkspace;
 
 namespace MutationFramework.EngineTests;
 
@@ -87,6 +91,5 @@ public sealed class ArchitectureBoundaryTests
       .Select(reference => reference.Name ?? string.Empty)
       .Order(StringComparer.Ordinal)
       .ToArray();
-
 
 }

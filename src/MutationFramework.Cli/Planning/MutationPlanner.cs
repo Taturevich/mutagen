@@ -1,3 +1,5 @@
+using System.Numerics;
+
 namespace MutationFramework.Sdk;
 
 public enum MutationExecutionMode
@@ -11,7 +13,13 @@ public sealed record MutationBatch(int RunId, IReadOnlyList<string> MutantIds, I
     IReadOnlyDictionary<string, string> TestToMutantId, long EstimatedDurationMs, bool RequiredIsolation, int TimeoutSeconds);
 
 public sealed record MutationPlanStatistics(int CoveredMutants, int UncoveredMutants, int ConflictEdges,
-    int BatchCount, double AverageMutantsPerBatch, long EstimatedTestExecutions);
+    int BatchCount, double AverageMutantsPerBatch, long EstimatedTestExecutions)
+{
+  /// <summary>Exact count, including plans exceeding the legacy Int32 representation.</summary>
+  public long ExactConflictEdges { get; init; } = ConflictEdges;
+  /// <summary>True when the legacy ConflictEdges field is capped at Int32.MaxValue.</summary>
+  public bool ConflictEdgesOverflow => ExactConflictEdges > int.MaxValue;
+}
 
 public sealed record MutationExecutionPlan(IReadOnlyList<MutationBatch> Batches,
     IReadOnlyList<MutationResult> PreclassifiedMutants, MutationPlanStatistics Statistics,
@@ -36,37 +44,45 @@ internal static class MutationPlanner
       throw new InvalidOperationException("Batched execution requires complete, successful per-test coverage.");
     }
 
-    var testIndexes = workItems.SelectMany(x => x.TestIds).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)
-        .Select((testId, index) => (testId, index)).ToDictionary(x => x.testId, x => x.index, StringComparer.Ordinal);
-    var wordCount = (testIndexes.Count + 63) / 64;
-    ulong[] CoverageMask(MutationWorkItem item)
-    {
-      var mask = new ulong[wordCount];
-      foreach (var testId in item.TestIds)
-      {
-        var bit = testIndexes[testId];
-        mask[bit >> 6] |= 1UL << (bit & 63);
-      }
-      return mask;
-    }
-    var ordered = workItems.OrderByDescending(x => x.EstimatedDurationMs).ThenBy(x => x.MutantId, StringComparer.Ordinal)
-        .Select(item => (Item: item, Mask: CoverageMask(item))).ToArray();
+    var ordered = workItems.OrderByDescending(x => x.EstimatedDurationMs).ThenBy(x => x.MutantId, StringComparer.Ordinal).ToArray();
     var groups = new List<List<MutationWorkItem>>();
-    var masksByGroup = new List<ulong[]>();
-    foreach (var (item, mask) in ordered)
+    // Store only actual test/batch memberships. The first-free lower bound makes a
+    // single broad integration test linear rather than scanning all preceding batches.
+    var occupied = new Dictionary<string, HashSet<int>>(StringComparer.Ordinal);
+    var firstFree = new Dictionary<string, int>(StringComparer.Ordinal);
+    foreach (var item in ordered)
     {
-      var groupIndex = selectedMode == MutationExecutionMode.Isolated ? -1 :
-          masksByGroup.FindIndex(existing => !Intersects(existing, mask));
-      if (groupIndex < 0)
+      var groupIndex = groups.Count;
+      if (selectedMode == MutationExecutionMode.Batched)
       {
-        groupIndex = groups.Count;
+        groupIndex = 0;
+        foreach (var test in item.TestIds)
+        {
+          groupIndex = Math.Max(groupIndex, firstFree.GetValueOrDefault(test));
+        }
+        while (groupIndex < groups.Count && item.TestIds.Any(test => occupied.TryGetValue(test, out var used) && used.Contains(groupIndex)))
+        {
+          groupIndex++;
+        }
+      }
+      if (groupIndex == groups.Count)
+      {
         groups.Add([]);
-        masksByGroup.Add(new ulong[wordCount]);
       }
       groups[groupIndex].Add(item);
-      for (var word = 0; word < wordCount; word++)
+      foreach (var test in item.TestIds)
       {
-        masksByGroup[groupIndex][word] |= mask[word];
+        if (!occupied.TryGetValue(test, out var used))
+        {
+          occupied[test] = used = [];
+        }
+        used.Add(groupIndex);
+        var next = firstFree.GetValueOrDefault(test);
+        while (used.Contains(next))
+        {
+          next++;
+        }
+        firstFree[test] = next;
       }
     }
 
@@ -98,32 +114,7 @@ internal static class MutationPlanner
       }
     }
 
-    var mutantsByTest = new Dictionary<string, List<int>>(StringComparer.Ordinal);
-    for (var index = 0; index < workItems.Count; index++)
-    {
-      foreach (var testId in workItems[index].TestIds)
-      {
-        if (!mutantsByTest.TryGetValue(testId, out var indexes))
-        {
-          mutantsByTest[testId] = indexes = [];
-        }
-
-        indexes.Add(index);
-      }
-    }
-
-    var conflictPairs = new HashSet<long>();
-    foreach (var indexes in mutantsByTest.Values)
-    {
-      for (var left = 0; left < indexes.Count; left++)
-      {
-        for (var right = left + 1; right < indexes.Count; right++)
-        {
-          int a = Math.Min(indexes[left], indexes[right]), b = Math.Max(indexes[left], indexes[right]);
-          conflictPairs.Add(((long)a << 32) | (uint)b);
-        }
-      }
-    }
+    var conflictEdges = CountConflictEdges(workItems);
 
     var scheduledGroups = groups.Select(items =>
     {
@@ -147,21 +138,65 @@ internal static class MutationPlanner
         group.Items.Sum(x => x.EstimatedDurationMs), true, timeoutSeconds)).ToArray();
     var covered = workItems.Count;
     return new MutationExecutionPlan(batches, preclassified,
-        new MutationPlanStatistics(covered, preclassified.Count(x => x.Status == MutationStatus.NoCoverage), conflictPairs.Count,
+        new MutationPlanStatistics(covered, preclassified.Count(x => x.Status == MutationStatus.NoCoverage), (int)Math.Min(int.MaxValue, conflictEdges),
             batches.Length, batches.Length == 0 ? 0 : (double)covered / batches.Length,
-            workItems.Sum(x => (long)x.TestIds.Count)), requestedMode, selectedMode);
+            workItems.Sum(x => (long)x.TestIds.Count))
+        {
+          ExactConflictEdges = conflictEdges
+        }, requestedMode, selectedMode);
   }
 
-  private static bool Intersects(ulong[] left, ulong[] right)
+  internal static long CountConflictEdges(IReadOnlyList<MutationWorkItem> items)
   {
-    for (var i = 0; i < left.Length; i++)
+    // Sparse blocks avoid N*T storage for disjoint suites; dense tests use N/64 words.
+    var byTest = new Dictionary<string, Dictionary<int, ulong>>(StringComparer.Ordinal);
+    var testNumbers = new Dictionary<string, int>(StringComparer.Ordinal);
+    var identicalCoverage = new Dictionary<string, (IReadOnlyList<string> Tests, int Count)>(StringComparer.Ordinal);
+    for (var index = 0; index < items.Count; index++)
     {
-      if ((left[i] & right[i]) != 0)
+      var tests = items[index].TestIds.Distinct(StringComparer.Ordinal).ToArray();
+      foreach (var test in tests)
       {
-        return true;
+        if (!byTest.TryGetValue(test, out var words))
+        {
+          byTest[test] = words = [];
+          testNumbers[test] = testNumbers.Count;
+        }
+        var word = index >> 6;
+        words[word] = words.GetValueOrDefault(word) | (1UL << (index & 63));
+      }
+      var key = string.Join(",", tests.Select(test => testNumbers[test]).Order());
+      identicalCoverage.TryGetValue(key, out var group);
+      identicalCoverage[key] = (tests, group.Count + 1);
+    }
+    var neighborhood = new ulong[(items.Count + 63) / 64];
+    var touched = new List<int>();
+    long directedEdges = 0;
+    foreach (var (tests, count) in identicalCoverage.Values)
+    {
+      foreach (var test in tests)
+      {
+        foreach (var (word, bits) in byTest[test])
+        {
+          if (neighborhood[word] == 0)
+          {
+            touched.Add(word);
+          }
+          neighborhood[word] |= bits;
+        }
+      }
+      long neighbors = 0;
+      foreach (var word in touched)
+      {
+        neighbors += BitOperations.PopCount(neighborhood[word]);
+        neighborhood[word] = 0;
+      }
+      touched.Clear();
+      if (tests.Count > 0)
+      {
+        directedEdges += (neighbors - 1) * count;
       }
     }
-
-    return false;
+    return directedEdges / 2;
   }
 }

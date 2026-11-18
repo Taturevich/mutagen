@@ -1,7 +1,9 @@
-using MutationFramework.Sdk;
-using NUnit.Framework;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+
+using MutationFramework.Sdk;
+
+using NUnit.Framework;
 
 namespace MutationFramework.EngineTests;
 
@@ -10,6 +12,21 @@ using static MutationFramework.EngineTests.TestWorkspace;
 [TestFixture]
 public sealed class MutationDiscoveryTests
 {
+  [TestCase("int value = 1;")]
+  [TestCase("using var resource = Open();")]
+  [TestCase("Read(out var value);")]
+  [TestCase("label: Execute();")]
+  [Category("Unit")]
+  public void ExtensionDispatchRejectsStatementsWhoseScopeOrLifetimeWouldChange(string source)
+  {
+    var statement = Microsoft.CodeAnalysis.CSharp.SyntaxFactory.ParseStatement(source);
+    var description = new MutationDescription(new DualStatementMutator().Metadata, statement, ";", "scope:test", source)
+    {
+      ApplicationKind = MutationApplicationKind.StatementReplacement
+    };
+    Assert.That(MutationDiscovery.GetSchemaCompatibilityFailure(description), Does.Contain("scope"));
+  }
+
   [Test]
   [Category("Unit")]
   public void MutatorRegistryHasStableExplicitSelectionAndRejectsUnknownIds()
@@ -254,7 +271,11 @@ public sealed class MutationDiscoveryTests
       File.WriteAllText(source, "class Calculator { int Add(int left, int right) => left + right; }");
       var invalid = new Candidate("bad", "site-1", "Arithmetic", "Calculator.cs", 44, 3, 1, 44,
           "left + right", "left - right", "-", "0", "0");
-      var unrelated = invalid with { Id = "other", Line = 2 };
+      var unrelated = invalid with
+      {
+        Id = "other",
+        Line = 2
+      };
       var buildOutput = $"{source}(1,44): error CS0029: Cannot implicitly convert type\r\n{source}(1,2): error CS0103: unrelated error";
 
       var failures = MutationSchemaBuilder.FindInvalidCandidates(buildOutput, [invalid, unrelated], root);
@@ -271,5 +292,4 @@ public sealed class MutationDiscoveryTests
       }
     }
   }
-
 }

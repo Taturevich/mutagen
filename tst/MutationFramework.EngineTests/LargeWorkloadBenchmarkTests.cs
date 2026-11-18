@@ -1,15 +1,19 @@
-using static MutationFramework.EngineTests.TestWorkspace;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Text.Json;
+using System.Text.RegularExpressions;
+
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+
 using MutationFramework.Sdk;
+
 using NUnit.Framework;
+
+using static MutationFramework.EngineTests.TestWorkspace;
 
 namespace MutationFramework.EngineTests;
 
@@ -37,6 +41,100 @@ public sealed class LargeWorkloadBenchmarkTests
   public void EffectiveWorkerCountUsesTheSchedulerDiagnostic(string diagnostic, int requestedWorkers, int batches, int expected)
   {
     Assert.That(ResolveEffectiveWorkerCount([diagnostic], requestedWorkers, batches), Is.EqualTo(expected));
+  }
+
+  [Test, Explicit("Records repeated small/medium CLI runs with phase counters and sampled process memory.")]
+  [Category("Performance")]
+  public async Task SmallAndMediumWorkloadsAreMeasuredAcrossRepeatedRuns()
+  {
+    var root = FindRepositoryRoot();
+    var label = Environment.GetEnvironmentVariable("MUTAGEN_MEASUREMENT_LABEL") ?? "current";
+    var measurements = new List<object>();
+    foreach (var workload in new[] { "small", "medium" })
+    {
+      var project = workload == "small" ? "samples/SampleApplication/SampleApplication.csproj" : "benchmarks/ScaleSample/ScaleSample/ScaleSample.csproj";
+      var tests = workload == "small" ? "samples/SampleApplication.Tests/SampleApplication.Tests.csproj" : "benchmarks/ScaleSample/ScaleSample.Tests/ScaleSample.Tests.csproj";
+      for (var run = 0; run < 3; run++)
+      {
+        var directory = Path.Combine(root, "artifacts", "remediation", label, workload, "run-" + run);
+        Directory.CreateDirectory(directory);
+        var sample = new ProcessSample(SnapshotTrackedProcesses());
+        using var cancellation = new CancellationTokenSource();
+        var sampler = SampleProcessesAsync(sample, cancellation.Token);
+        var timer = Stopwatch.StartNew();
+        var start = new ProcessStartInfo("dotnet") { WorkingDirectory = root, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true };
+        start.ArgumentList.Add(Environment.GetEnvironmentVariable("MUTAGEN_BENCHMARK_CLI") ?? Path.Combine(root, "src/MutationFramework.Cli/bin/Debug/net11.0/MutationFramework.Cli.dll"));
+        start.ArgumentList.Add("run");
+        AddArgument(start, "--project", project);
+        AddArgument(start, "--tests", tests);
+        AddArgument(start, "--workers", "4");
+        AddArgument(start, "--execution-mode", "batched");
+        AddArgument(start, "--test-host-isolation", "per-batch");
+        AddArgument(start, "--output", directory);
+        AddArgument(start, "--cache", Path.Combine(root, "artifacts", "remediation", label, workload, "cache"));
+        AddArgument(start, "--report", "json,html");
+        if (workload == "medium")
+        {
+          AddArgument(start, "--mutators", "binary-operators");
+        }
+        try
+        {
+          using var process = Process.Start(start)!;
+          var stdout = process.StandardOutput.ReadToEndAsync();
+          var stderr = process.StandardError.ReadToEndAsync();
+          await process.WaitForExitAsync();
+          Assert.That(process.ExitCode, Is.Zero, await stdout + await stderr);
+        }
+        finally { cancellation.Cancel(); await sampler; }
+        using var report = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(directory, "mutation-report.json")));
+        var result = report.RootElement;
+        var mutants = result.GetProperty("Mutants").EnumerateArray().ToArray();
+        var digest = CacheIdentity.Hash(string.Join("\n", mutants.OrderBy(mutant => mutant.GetProperty("Id").GetString(), StringComparer.Ordinal)
+            .Select(mutant => mutant.GetProperty("Id").GetString() + "|" + mutant.GetProperty("Status").GetString() + "|" +
+                string.Join(",", mutant.GetProperty("CoveringTests").EnumerateArray().Select(test => test.GetString()).Order(StringComparer.Ordinal)))));
+        Assert.That(mutants, Has.Length.EqualTo(workload == "small" ? 34 : 206));
+        measurements.Add(new
+        {
+          workload,
+          run,
+          cacheState = run == 0 ? "cold" : "warm",
+          wallMs = timer.ElapsedMilliseconds,
+          mutationCount = mutants.Length,
+          digest,
+          timings = result.GetProperty("Timings").Clone(),
+          counters = result.GetProperty("Counters").Clone(),
+          totalDurationMs = result.GetProperty("TotalDurationMs").GetInt64(),
+          peakAggregateWorkingSetBytes = sample.PeakAggregateWorkingSetBytes
+        });
+        TestContext.Progress.WriteLine(JsonSerializer.Serialize(measurements[^1]));
+      }
+    }
+    File.WriteAllText(Path.Combine(root, "benchmarks", "results", "remediation-" + label + "-workloads.json"), JsonSerializer.Serialize(measurements, JsonOptions));
+  }
+
+  [TestCase("small", 28)]
+  [TestCase("medium", 206)]
+  [Explicit("Checks newly measured reports against the pinned executable Stryker transformations.")]
+  [Category("Performance")]
+  public void MeasuredWorkloadsMatchPinnedStrykerExecutableMutants(string workload, int expected)
+  {
+    var root = FindRepositoryRoot();
+    var label = Environment.GetEnvironmentVariable("MUTAGEN_MEASUREMENT_LABEL") ?? "optimized";
+    using var report = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "artifacts", "remediation", label, workload, "run-2", "mutation-report.json")));
+    var mutants = report.RootElement.GetProperty("Mutants").EnumerateArray()
+        .Where(mutant => workload != "small" || mutant.GetProperty("Operator").GetString() != "Removal").ToArray();
+    var stryker = workload == "small" ? "stryker-small-matched-current" : "stryker-medium-5.0.0-run1";
+    var differential = CompareWithStryker(Path.Combine(root, "benchmarks", "results", stryker, "reports", "mutation-report.json"),
+        JsonSerializer.SerializeToElement(mutants), includeIgnored: false);
+    Assert.Multiple(() =>
+    {
+      Assert.That(differential.Common, Is.EqualTo(expected));
+      Assert.That(differential.MutagenOnly, Is.Zero);
+      Assert.That(differential.StrykerOnly, Is.Zero);
+      Assert.That(differential.OutcomeDifferences, Is.Zero);
+      Assert.That(differential.CoverageAssociationDifferences, Is.Zero);
+    });
+    TestContext.Progress.WriteLine(JsonSerializer.Serialize(differential, JsonOptions));
   }
 
   [Test, Explicit("Compares the current matched small-workload report with the pinned Stryker report.")]
@@ -86,6 +184,11 @@ public sealed class LargeWorkloadBenchmarkTests
       TestHostIsolationPolicy.PerMutant => $"mutagen-large-permutant-current-workers-{workers}",
       _ => $"mutagen-large-workers-{workers}"
     };
+    var measurementLabel = Environment.GetEnvironmentVariable("MUTAGEN_MEASUREMENT_LABEL");
+    if (measurementLabel is not null)
+    {
+      benchmarkName = "remediation-" + measurementLabel + "-" + benchmarkName;
+    }
     var benchmarkRoot = Path.Combine(repositoryRoot, "benchmarks", "results", benchmarkName);
     var sqliteRoot = Path.Combine(benchmarkRoot, "sqlite");
     var cacheDirectory = Path.Combine(benchmarkRoot, "cache");
@@ -121,7 +224,7 @@ public sealed class LargeWorkloadBenchmarkTests
         var sampler = SampleProcessesAsync(processSample, sampleCancellation.Token);
         var timer = Stopwatch.StartNew();
         var outputPath = Path.Combine(benchmarkRoot, $"run-{runIndex + 1}-{Guid.NewGuid():N}");
-        var cliAssembly = Path.Combine(repositoryRoot, "src", "MutationFramework.Cli", "bin", "Debug", "net11.0", "MutationFramework.Cli.dll");
+        var cliAssembly = Environment.GetEnvironmentVariable("MUTAGEN_BENCHMARK_CLI") ?? Path.Combine(repositoryRoot, "src", "MutationFramework.Cli", "bin", "Debug", "net11.0", "MutationFramework.Cli.dll");
         Assert.That(File.Exists(cliAssembly), Is.True, $"Build the CLI before running this benchmark: {cliAssembly}");
         var startInfo = new ProcessStartInfo("dotnet")
         {
@@ -250,6 +353,10 @@ public sealed class LargeWorkloadBenchmarkTests
         TestHostIsolationPolicy.PerMutant => $"mutagen-large-workers-{workers}-per-mutant.json",
         _ => $"mutagen-large-workers-{workers}.json"
       };
+      if (measurementLabel is not null)
+      {
+        artifactName = "remediation-" + measurementLabel + "-" + artifactName;
+      }
       var artifactPath = Path.Combine(repositoryRoot, "benchmarks", "results", artifactName);
       File.WriteAllText(artifactPath, JsonSerializer.Serialize(report, JsonOptions));
       TestContext.Progress.WriteLine($"Benchmark artifact: {artifactPath}");
@@ -317,7 +424,10 @@ public sealed class LargeWorkloadBenchmarkTests
       {
         using (process)
         {
-          try { processIds.Add(process.Id); }
+          try
+          {
+            processIds.Add(process.Id);
+          }
           catch (InvalidOperationException) { }
         }
       }
@@ -489,8 +599,6 @@ public sealed class LargeWorkloadBenchmarkTests
     }
   }
 
-
-
   private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
   private sealed class ProcessSample
@@ -498,7 +606,10 @@ public sealed class LargeWorkloadBenchmarkTests
     private long _peakAggregateWorkingSetBytes;
 
     public ProcessSample(HashSet<int> preexistingProcessIds) => PreexistingProcessIds = preexistingProcessIds;
-    public HashSet<int> PreexistingProcessIds { get; }
+    public HashSet<int> PreexistingProcessIds
+    {
+      get;
+    }
     public ConcurrentDictionary<int, byte> ObservedProcessIds { get; } = new();
     public long PeakAggregateWorkingSetBytes => Interlocked.Read(ref _peakAggregateWorkingSetBytes);
 
@@ -508,7 +619,10 @@ public sealed class LargeWorkloadBenchmarkTests
       while (workingSetBytes > peak)
       {
         var prior = Interlocked.CompareExchange(ref _peakAggregateWorkingSetBytes, workingSetBytes, peak);
-        if (prior == peak) { break; }
+        if (prior == peak)
+        {
+          break;
+        }
         peak = prior;
       }
     }

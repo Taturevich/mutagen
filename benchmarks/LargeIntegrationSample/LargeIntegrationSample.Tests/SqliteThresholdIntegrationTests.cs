@@ -1,4 +1,5 @@
 using Microsoft.Data.Sqlite;
+
 using NUnit.Framework;
 
 namespace LargeIntegrationSample.Tests;

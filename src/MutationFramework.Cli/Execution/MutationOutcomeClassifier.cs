@@ -25,7 +25,7 @@ internal static class MutationOutcomeClassifier
         timeout ??= run;
       }
       if ((!stoppedAfterKill || run.FailureKind != TestFailureKind.Bailed) &&
-          (run.Skipped || run.FailureKind == TestFailureKind.Unattributed))
+          (run.Skipped || run.FailureKind is TestFailureKind.Unattributed or TestFailureKind.Canceled))
       {
         uncertain ??= run;
       }
@@ -36,6 +36,10 @@ internal static class MutationOutcomeClassifier
       }
     }
 
+    if (firstKill is null && runs.Any(run => run.FailureKind == TestFailureKind.Bailed))
+    {
+      uncertain ??= runs.First(run => run.FailureKind == TestFailureKind.Bailed);
+    }
     // A complete batch requires every responsible test to be attributable. A mutant run
     // deliberately canceled after its first attributable failure may contain bailed tests.
     var status = infrastructure is not null ? MutationStatus.InfrastructureError

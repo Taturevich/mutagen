@@ -1,6 +1,19 @@
 <Solution>
   <Folder Name="/Documentation/">
     <File Path="README.md" />
+    <File Path=".editorconfig" />
+    <File Path=".gitattributes" />
+    <File Path="workflow/CHANGELOG.md" />
+    <File Path="workflow/dev/correctness-scalability-remediation-2026-11-17.md" />
+    <File Path="benchmarks/results/remediation-baseline-rewrite.json" />
+    <File Path="benchmarks/results/remediation-optimized.json" />
+    <File Path="benchmarks/results/remediation-optimized-workloads.json" />
+    <File Path="benchmarks/results/remediation-optimized-mutagen-large-workers-4-per-batch.json" />
+    <File Path="benchmarks/results/remediation-comparison.json" />
+    <File Path="benchmarks/results/remediation-baseline-bounded.json" />
+    <File Path="benchmarks/results/remediation-baseline-stress-limit.json" />
+    <File Path="benchmarks/results/remediation-baseline-workloads.json" />
+    <File Path="benchmarks/results/remediation-baseline-mutagen-large-workers-4-per-batch.json" />
     <File Path="docs/architecture.md" />
     <File Path="docs/benchmarks.md" />
     <File Path="benchmarks/results/maintainability-refactoring-2026-11-17.json" />

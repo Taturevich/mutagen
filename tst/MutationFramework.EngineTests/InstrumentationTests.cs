@@ -1,8 +1,11 @@
-using MutationFramework.Sdk;
-using NUnit.Framework;
+using System.Linq.Expressions;
+
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using System.Linq.Expressions;
+
+using MutationFramework.Sdk;
+
+using NUnit.Framework;
 
 namespace MutationFramework.EngineTests;
 
@@ -11,6 +14,182 @@ using static MutationFramework.EngineTests.TestWorkspace;
 [TestFixture]
 public sealed class InstrumentationTests
 {
+  [TestCase(2)]
+  [TestCase(10000)]
+  [Category("Component")]
+  public void RuntimeRejectsSimultaneousActivationsAtOneSite(int mutantCount)
+  {
+    var previous = Environment.GetEnvironmentVariable("MUTATION_ACTIVE_ID");
+    try
+    {
+      Environment.SetEnvironmentVariable("MUTATION_ACTIVE_ID", "0,1");
+      var candidates = Enumerable.Range(0, mutantCount).Select(index => new Candidate($"M{index}", $"site{index / 2}", "Removal",
+          "Counter.cs", 0, 1, 1, 1, ";", ";", $"M{index}", (index / 2).ToString(), index.ToString())).ToArray();
+      var tree = CSharpSyntaxTree.ParseText(MutationRuntimeSource.RuntimeSource(mutantCount / 2, candidates));
+      var compilation = CSharpCompilation.Create("InvalidActivation" + Guid.NewGuid().ToString("N"), [tree], PlatformReferences,
+          new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+      using var bytes = new MemoryStream();
+      var emitted = compilation.Emit(bytes);
+      Assert.That(emitted.Success, Is.True, string.Join(Environment.NewLine, emitted.Diagnostics));
+      bytes.Position = 0;
+      var error = Assert.Catch<Exception>(() =>
+      {
+        var assembly = System.Runtime.Loader.AssemblyLoadContext.Default.LoadFromStream(bytes);
+        assembly.GetType("MutationRuntime")!.GetMethod("IsActive")!.Invoke(null, [0]);
+      });
+      Assert.That(error!.ToString(), Does.Contain("Multiple mutations at one site"));
+    }
+    finally { Environment.SetEnvironmentVariable("MUTATION_ACTIVE_ID", previous); }
+  }
+
+  [Test]
+  [Category("Component")]
+  public async Task MultipleStatementReplacementsExecuteExactlyOneBranchInCompiledAsyncAndThrowingMethods()
+  {
+    var directory = NewOutputDirectory();
+    Directory.CreateDirectory(directory);
+    try
+    {
+      var source = Path.Combine(directory, "Counter.cs");
+      var target = Path.Combine(directory, "Instrumented.cs");
+      var project = Path.Combine(directory, "Counter.csproj");
+      File.WriteAllText(source, """
+          using System;
+          using System.Threading.Tasks;
+          public sealed class Counter
+          {
+            public int Calls;
+            public bool Throw;
+            void Step() { Calls++; if (Throw) throw new InvalidOperationException("step"); }
+            async Task StepAsync() { await Task.Yield(); Step(); }
+            public void Execute() { { Step(); } }
+            public void Twice() { Step(); Step(); }
+            public async Task ExecuteAsync() { await StepAsync(); }
+            public void Conditional()
+            {
+          #if FEATURE
+              Step();
+          #endif
+            }
+          }
+          """);
+      var registry = new MutatorRegistry([new DualStatementMutator(), new DefaultRemovalAdapter()]);
+      var options = new MutationOptions { ProjectPath = project, TestProjects = [], Registry = registry };
+      var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["FEATURE"]);
+      var candidates = MutationDiscovery.DiscoverCandidates([source], project, options, [], CancellationToken.None, context: new(ParseOptions: parse));
+      File.Copy(source, target);
+      MutationSchemaBuilder.RewriteSources(new()
+      {
+        [source] = target
+      }, candidates, directory, directory, new Dictionary<string, CSharpParseOptions> { [source] = parse });
+      const string runtime = "public static class MutationRuntime { public static int Active = -1; public static int Hits; public static void Hit(int id) { Hits++; } public static bool IsActive(int id) => id == Active; public static T Probe<T>(int id, System.Func<T> f) { Hit(id); return f(); } }";
+      var compilation = CSharpCompilation.Create("Counter" + Guid.NewGuid().ToString("N"),
+          new[] { CSharpSyntaxTree.ParseText(File.ReadAllText(target), parse), CSharpSyntaxTree.ParseText(runtime, parse) },
+          PlatformReferences, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+      using var bytes = new MemoryStream();
+      var emitted = compilation.Emit(bytes);
+      Assert.That(emitted.Success, Is.True, string.Join(Environment.NewLine, emitted.Diagnostics));
+      bytes.Position = 0;
+      var assembly = System.Runtime.Loader.AssemblyLoadContext.Default.LoadFromStream(bytes);
+      var type = assembly.GetType("Counter")!;
+      var active = assembly.GetType("MutationRuntime")!.GetField("Active")!;
+      var originalTree = CSharpSyntaxTree.ParseText(File.ReadAllText(source), parse);
+      var originalCompilation = CSharpCompilation.Create("OriginalCounter" + Guid.NewGuid().ToString("N"), [originalTree],
+          PlatformReferences, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+      using var originalBytes = new MemoryStream();
+      var originalEmit = originalCompilation.Emit(originalBytes);
+      Assert.That(originalEmit.Success, Is.True, string.Join(Environment.NewLine, originalEmit.Diagnostics));
+      originalBytes.Position = 0;
+      var originalType = System.Runtime.Loader.AssemblyLoadContext.Default.LoadFromStream(originalBytes).GetType("Counter")!;
+      var methods = originalTree.GetRoot().DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.MethodDeclarationSyntax>()
+          .ToDictionary(method => method.Identifier.ValueText);
+      foreach (var method in new[] { "Execute", "Twice", "ExecuteAsync", "Conditional" })
+      {
+        var originalCounter = Activator.CreateInstance(originalType)!;
+        if (originalType.GetMethod(method)!.Invoke(originalCounter, null) is Task originalTask)
+        {
+          await originalTask;
+        }
+        var originalCalls = originalType.GetField("Calls")!.GetValue(originalCounter);
+        var methodSyntax = methods[method];
+        var local = candidates.Where(candidate => candidate.ApplicationKind == MutationApplicationKind.StatementReplacement &&
+            methodSyntax.Span.Contains(new Microsoft.CodeAnalysis.Text.TextSpan(candidate.Start, candidate.Length))).ToArray();
+        foreach (var activation in new[] { -1, int.MaxValue }.Concat(local.Select(candidate => int.Parse(candidate.MutantRuntimeId))))
+        {
+          var counter = Activator.CreateInstance(type)!;
+          active.SetValue(null, activation);
+          var invocation = type.GetMethod(method)!.Invoke(counter, null);
+          if (invocation is Task task)
+          {
+            await task;
+          }
+          var replacement = local.SingleOrDefault(candidate => candidate.MutantRuntimeId == activation.ToString());
+          var expected = replacement is null ? (method == "Twice" ? 2 : 1)
+              : (replacement.ReplacementToken == "dual:10" ? 10 : 100) + (method == "Twice" ? 1 : 0);
+          Assert.That(type.GetField("Calls")!.GetValue(counter), Is.EqualTo(expected), $"{method}/{activation}");
+          if (replacement is null)
+          {
+            Assert.That(type.GetField("Calls")!.GetValue(counter), Is.EqualTo(originalCalls));
+          }
+        }
+      }
+      active.SetValue(null, -1);
+      var throwing = Activator.CreateInstance(type)!;
+      type.GetField("Throw")!.SetValue(throwing, true);
+      var error = Assert.Throws<System.Reflection.TargetInvocationException>(() => type.GetMethod("Execute")!.Invoke(throwing, null));
+      Assert.That(error!.InnerException, Is.TypeOf<InvalidOperationException>());
+      Assert.That(type.GetField("Calls")!.GetValue(throwing), Is.EqualTo(1));
+      var originalThrowing = Activator.CreateInstance(originalType)!;
+      originalType.GetField("Throw")!.SetValue(originalThrowing, true);
+      var originalError = Assert.Throws<System.Reflection.TargetInvocationException>(() => originalType.GetMethod("Execute")!.Invoke(originalThrowing, null));
+      Assert.That(error.InnerException!.GetType(), Is.EqualTo(originalError!.InnerException!.GetType()));
+      Assert.That(type.GetField("Calls")!.GetValue(throwing), Is.EqualTo(originalType.GetField("Calls")!.GetValue(originalThrowing)));
+      foreach (var replacement in candidates.Where(candidate => candidate.ApplicationKind == MutationApplicationKind.StatementReplacement &&
+          methods["Execute"].Span.Contains(new Microsoft.CodeAnalysis.Text.TextSpan(candidate.Start, candidate.Length))))
+      {
+        var counter = Activator.CreateInstance(type)!;
+        type.GetField("Throw")!.SetValue(counter, true);
+        active.SetValue(null, int.Parse(replacement.MutantRuntimeId));
+        Assert.DoesNotThrow(() => type.GetMethod("Execute")!.Invoke(counter, null));
+        Assert.That(type.GetField("Calls")!.GetValue(counter), Is.EqualTo(replacement.ReplacementToken == "dual:10" ? 10 : 100));
+      }
+    }
+    finally { Directory.Delete(directory, true); }
+  }
+
+  [Test]
+  [Category("EndToEnd")]
+  public async Task DualExtensionStatementReplacementsAndBuiltInRemovalExecuteRealMutationSession()
+  {
+    var directory = NewOutputDirectory();
+    var production = Path.Combine(directory, "Production");
+    Directory.CreateDirectory(production);
+    try
+    {
+      var project = Path.Combine(production, "Counter.csproj");
+      File.WriteAllText(project, "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net11.0</TargetFramework></PropertyGroup></Project>");
+      File.WriteAllText(Path.Combine(production, "Counter.cs"), "public sealed class Counter { public int Calls; void Step() { Calls++; } public void Execute() { Step(); } }");
+      var tests = WriteNUnitProject(Path.Combine(directory, "Tests"), project,
+          "using NUnit.Framework; public sealed class Tests { [Test] public void OriginalExecutesOnce() { var c = new Counter(); c.Execute(); Assert.That(c.Calls, Is.EqualTo(1)); } }");
+      var result = await MutationEngine.RunAsync(new MutationOptions
+      {
+        ProjectPath = project,
+        TestProjects = [tests],
+        Registry = new MutatorRegistry([new DualStatementMutator(), new DefaultRemovalAdapter()]),
+        MaxWorkers = 1,
+        OutputDirectory = Path.Combine(directory, "reports"),
+        TimeoutSeconds = 120
+      });
+      Assert.That(result.OverallStatus, Is.EqualTo("Completed"), string.Join(Environment.NewLine, result.Diagnostics));
+      var replacements = result.Mutants.Where(mutant => mutant.Replacement.Contains("Calls +=", StringComparison.Ordinal)).ToArray();
+      Assert.That(replacements, Has.Length.EqualTo(2));
+      Assert.That(replacements.Select(mutant => mutant.Status), Is.All.EqualTo(MutationStatus.Killed));
+      Assert.That(result.Tests, Has.Count.EqualTo(1));
+      Assert.That(result.Mutants.Where(mutant => mutant.Original == "Step();").Select(mutant => mutant.Status), Is.All.EqualTo(MutationStatus.Killed));
+    }
+    finally { if (Directory.Exists(directory)) { Directory.Delete(directory, true); } }
+  }
+
   [Test]
   [Category("Component")]
   public void InlineSiteProbesPreserveBoundDynamicCheckedAndExpressionTreeSemantics()
@@ -118,7 +297,11 @@ public sealed class InstrumentationTests
       operandOrder.Clear();
       var leftValue = fixture.GetField("LeftValue")!;
       var rightValue = fixture.GetField("RightValue")!;
-      void SetCheckedOperands(int left, int right) { leftValue.SetValue(null, left); rightValue.SetValue(null, right); }
+      void SetCheckedOperands(int left, int right)
+      {
+        leftValue.SetValue(null, left);
+        rightValue.SetValue(null, right);
+      }
       object? InvokeChecked() => fixture.GetMethod("CheckedAdd")!.Invoke(null, null);
       SetCheckedOperands(5, 2);
       Assert.That(InvokeChecked(), Is.EqualTo(7));
@@ -275,10 +458,16 @@ public sealed class InstrumentationTests
           {
             for (var index = 0; index < 1_000; index++)
             {
-              foreach (var site in drain()) { observed.Add(site); }
+              foreach (var site in drain())
+              {
+                observed.Add(site);
+              }
             }
           });
-      foreach (var site in drain()) { observed.Add(site); }
+      foreach (var site in drain())
+      {
+        observed.Add(site);
+      }
       Assert.That(observed, Does.Contain(0));
       Assert.That(observed, Does.Contain(1));
 
@@ -328,5 +517,4 @@ public sealed class InstrumentationTests
       }
     }
   }
-
 }

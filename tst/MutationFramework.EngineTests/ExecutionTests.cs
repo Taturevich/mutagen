@@ -1,6 +1,8 @@
-using MutationFramework.Sdk;
-using NUnit.Framework;
 using Microsoft.CodeAnalysis;
+
+using MutationFramework.Sdk;
+
+using NUnit.Framework;
 
 namespace MutationFramework.EngineTests;
 
@@ -9,6 +11,71 @@ using static MutationFramework.EngineTests.TestWorkspace;
 [TestFixture]
 public sealed class ExecutionTests
 {
+  [TestCase(false)]
+  [TestCase(true)]
+  [Category("EndToEnd")]
+  public async Task ProcessOutputDrainHonorsTimeoutAndCancellationAfterItsParentExits(bool cancel)
+  {
+    var directory = NewOutputDirectory();
+    Directory.CreateDirectory(directory);
+    var pidFile = Path.Combine(directory, "child.pid");
+    try
+    {
+      var project = Path.Combine(directory, "Pipe.csproj");
+      File.WriteAllText(project, "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net11.0</TargetFramework><OutputType>Exe</OutputType><ImplicitUsings>enable</ImplicitUsings></PropertyGroup></Project>");
+      File.WriteAllText(Path.Combine(directory, "Program.cs"), """
+          using System.Diagnostics;
+          if (args[0] == "hold")
+          {
+            File.WriteAllText(args[1], Environment.ProcessId.ToString());
+            await Task.Delay(30000);
+            return;
+          }
+          var start = new ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = false, RedirectStandardInput = true, CreateNoWindow = true };
+          start.ArgumentList.Add(System.Reflection.Assembly.GetExecutingAssembly().Location);
+          start.ArgumentList.Add("hold");
+          start.ArgumentList.Add(args[1]);
+          using var child = Process.Start(start)!;
+          for (var i = 0; i < 100 && !File.Exists(args[1]); i++) { await Task.Delay(10); }
+          Console.WriteLine("parent exited; child retains output handles");
+          """);
+      var build = await ProcessRunner.RunProcess("dotnet", ["build", project, "--nologo", "-v:q", "-nodeReuse:false"], directory,
+          null, 60, new RunMetrics(), CancellationToken.None);
+      Assert.That(build.ExitCode, Is.Zero, build.Output);
+      using var cancellation = new CancellationTokenSource();
+      if (cancel)
+      {
+        cancellation.CancelAfter(TimeSpan.FromSeconds(1));
+      }
+      var timer = System.Diagnostics.Stopwatch.StartNew();
+      var run = ProcessRunner.RunProcess("dotnet", [Path.Combine(directory, "bin", "Debug", "net11.0", "Pipe.dll"), "parent", pidFile],
+          directory, null, 2, new RunMetrics(), cancellation.Token);
+      if (cancel)
+      {
+        _ = await Assert.ThrowsAsync<OperationCanceledException>(async () => await run);
+      }
+      else
+      {
+        Assert.That((await run).ExitCode, Is.EqualTo(-1));
+      }
+      Assert.That(timer.Elapsed, Is.LessThan(TimeSpan.FromSeconds(8)));
+    }
+    finally
+    {
+      if (File.Exists(pidFile))
+      {
+        try
+        {
+          using var child = System.Diagnostics.Process.GetProcessById(int.Parse(File.ReadAllText(pidFile)));
+          child.Kill(entireProcessTree: true);
+          child.WaitForExit(3000);
+        }
+        catch (ArgumentException) { }
+      }
+      Directory.Delete(directory, true);
+    }
+  }
+
   [Test]
   [Category("Unit")]
   public void TestProfilesDistinguishPerTestPerMutantAndMixedExecutionPolicies()
@@ -359,5 +426,4 @@ public sealed class ExecutionTests
       }
     }
   }
-
 }

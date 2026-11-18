@@ -1,11 +1,15 @@
-using static MutationFramework.EngineTests.TestWorkspace;
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using MutationFramework.Sdk;
-using NUnit.Framework;
 using System.Diagnostics;
 using System.Reflection;
 using System.Text.Json;
+
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+
+using MutationFramework.Sdk;
+
+using NUnit.Framework;
+
+using static MutationFramework.EngineTests.TestWorkspace;
 
 namespace MutationFramework.EngineTests;
 
@@ -218,7 +222,14 @@ public sealed class CoverageInstrumentationBenchmarkTests
           compilationOptimization = "Release",
           benchmarkHarness = "Roslyn-emitted sparse per-test coverage drain"
         },
-        workload = new { siteCount, operationsPerSample, samples, activeSitesPerDrain = 3, identicalCoverageChecksum = true },
+        workload = new
+        {
+          siteCount,
+          operationsPerSample,
+          samples,
+          activeSitesPerDrain = 3,
+          identicalCoverageChecksum = true
+        },
         results = new
         {
           previousAtomicExchangeEverySite = previousResult,
@@ -329,7 +340,12 @@ public sealed class CoverageInstrumentationBenchmarkTests
           compilationOptimization = "Release",
           loadedAssemblyCount = AppDomain.CurrentDomain.GetAssemblies().Length
         },
-        workload = new { operationsPerSample, samples, identicalCoverageChecksum = true },
+        workload = new
+        {
+          operationsPerSample,
+          samples,
+          identicalCoverageChecksum = true
+        },
         results = new
         {
           repeatedAssemblyReflection = uncachedResult,
@@ -375,7 +391,10 @@ public sealed class CoverageInstrumentationBenchmarkTests
 
     static Measurement MeasureReader(CompiledVariant variant, int iterations, int sampleCount)
     {
-      for (var warmup = 0; warmup < 2; warmup++) { _ = variant.Execute(iterations / 10); }
+      for (var warmup = 0; warmup < 2; warmup++)
+      {
+        _ = variant.Execute(iterations / 10);
+      }
       var elapsed = new double[sampleCount];
       var allocated = new long[sampleCount];
       var checksum = 0L;
@@ -397,6 +416,5 @@ public sealed class CoverageInstrumentationBenchmarkTests
   private sealed record CompiledVariant(Func<int, long> Execute, Assembly Assembly);
   private sealed record Measurement(double MedianMilliseconds, double[] SamplesMilliseconds,
       long MedianAllocatedBytesPerSample, long Checksum);
-
 
 }

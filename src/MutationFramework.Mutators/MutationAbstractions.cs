@@ -33,7 +33,10 @@ public sealed record MutationDescription(MutatorMetadata Mutator, SyntaxNode Nod
 /// <summary>Implementations inspect typed Roslyn nodes and semantic context, then describe candidates.</summary>
 public interface IMutator
 {
-  MutatorMetadata Metadata { get; }
+  MutatorMetadata Metadata
+  {
+    get;
+  }
   IEnumerable<MutationDescription> Generate(SyntaxNode node, SemanticModel semanticModel,
       Func<ExpressionSyntax, SemanticModel, (bool Supported, string? Reason)> validate);
 }
