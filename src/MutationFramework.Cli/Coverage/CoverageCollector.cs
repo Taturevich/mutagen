@@ -22,7 +22,8 @@ internal sealed class CoverageCollector(MutationOptions options, ArtifactCache c
     var testDlls = compilation.TestDlls;
     var timer = Stopwatch.StartNew();
     var coverageMap = new CoverageMap(candidates);
-    using var baselineSession = new TestPlatformSession(TestPlatformPaths.FindConsole(clonedTests[0]), metrics.StartedTestRunner);
+    using var baselineSession = new TestPlatformSession(TestPlatformPaths.FindConsole(clonedTests[0]), metrics.StartedTestRunner,
+        Path.Combine(opt.OutputDirectory, "host-logs"), opt.HostStartupTimeoutSeconds);
     metrics.DiscoveryOperations++;
     var stableTestSources = testDlls.Select((assembly, index) =>
     {
@@ -89,7 +90,8 @@ internal sealed class CoverageCollector(MutationOptions options, ArtifactCache c
     {
       while (baselineSessions.Count < baselineWorkerCount)
       {
-        baselineSessions.Add(new TestPlatformSession(TestPlatformPaths.FindConsole(clonedTests[0]), metrics.StartedTestRunner));
+        baselineSessions.Add(new TestPlatformSession(TestPlatformPaths.FindConsole(clonedTests[0]), metrics.StartedTestRunner,
+            Path.Combine(opt.OutputDirectory, "host-logs"), opt.HostStartupTimeoutSeconds));
       }
 
       var baselineRuns = new ConcurrentDictionary<string, TestRun>(StringComparer.Ordinal);
@@ -161,6 +163,10 @@ internal sealed class CoverageCollector(MutationOptions options, ArtifactCache c
       {
         throw new InvalidOperationException($"Baseline execution produced {baselineRuns.Count} results for {testCases.Length} selected tests.");
       }
+
+      await File.WriteAllTextAsync(Path.Combine(opt.OutputDirectory, "baseline-results.json"), System.Text.Json.JsonSerializer.Serialize(
+          baselineRuns.OrderBy(pair => pair.Key).ToDictionary(pair => pair.Key, pair => pair.Value),
+          new System.Text.Json.JsonSerializerOptions { WriteIndented = true }), ct);
 
       foreach (var testCase in testCases)
       {

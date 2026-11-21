@@ -50,7 +50,7 @@ internal static class CompilationWorkspace
       }
     }
     var args = new List<string> { "msbuild", project,
-      "-getItem:Compile,ProjectReference,None,Content,EmbeddedResource,AdditionalFiles,Analyzer,Page,Resource",
+      "-getItem:Compile,ProjectReference,None,Content,EmbeddedResource,AdditionalFiles,Analyzer,Page,Resource,Reference",
       "-getProperty:AssemblyName,LangVersion,DefineConstants,TargetFramework,TargetFrameworks,TargetPath", "-nologo" };
     if (!string.IsNullOrWhiteSpace(targetFramework))
     {
@@ -91,11 +91,13 @@ internal static class CompilationWorkspace
             : Path.GetFullPath(Path.Combine(projectDirectory, item.GetProperty("Identity").GetString()!)))
         .FirstOrDefault(file => file.Split(Path.DirectorySeparatorChar).Contains("bin", StringComparer.OrdinalIgnoreCase) ||
             file.Split(Path.DirectorySeparatorChar).Contains("obj", StringComparer.OrdinalIgnoreCase) && !BuildInputs.IsKnownSdkGeneratedCompileSource(file));
-    var buildInputs = new[] { "None", "Content", "EmbeddedResource", "AdditionalFiles", "Analyzer", "Page", "Resource" }
+    var buildInputs = new[] { "None", "Content", "EmbeddedResource", "AdditionalFiles", "Analyzer", "Page", "Resource", "Reference" }
         .Where(itemName => root.GetProperty("Items").TryGetProperty(itemName, out _))
         .SelectMany(itemName => root.GetProperty("Items").GetProperty(itemName).EnumerateArray())
-        .Where(item => item.TryGetProperty("FullPath", out var fullPath) && File.Exists(fullPath.GetString()))
-        .Select(item => Path.GetFullPath(item.GetProperty("FullPath").GetString()!))
+        .Select(item => item.TryGetProperty("HintPath", out var hintPath) && !string.IsNullOrWhiteSpace(hintPath.GetString())
+            ? Path.GetFullPath(hintPath.GetString()!, projectDirectory)
+            : item.TryGetProperty("FullPath", out var fullPath) && !string.IsNullOrWhiteSpace(fullPath.GetString()) ? Path.GetFullPath(fullPath.GetString()!) : null)
+        .Where(path => path is not null && File.Exists(path)).Select(path => path!)
         .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToArray();
     var files = compileItems
         .Select(item => Path.GetFullPath(Path.Combine(projectDirectory, item.GetProperty("Identity").GetString()!)))

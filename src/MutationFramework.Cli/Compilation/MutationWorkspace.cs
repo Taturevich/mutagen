@@ -292,14 +292,17 @@ internal static class MutationWorkspace
     }
   }
 
-  internal static (int Files, long Bytes) CopyProject(string from, string to)
+  internal static (int Files, long Bytes) CopyProject(string from, string to, CancellationToken cancellationToken = default)
   {
     static bool Excluded(string path) => path.Split(Path.DirectorySeparatorChar).Any(part =>
         part.Equals("bin", StringComparison.OrdinalIgnoreCase) || part.Equals("obj", StringComparison.OrdinalIgnoreCase) ||
         part.Equals(".git", StringComparison.OrdinalIgnoreCase) || part.Equals("node_modules", StringComparison.OrdinalIgnoreCase) ||
         part.Equals(".mutagen-cache", StringComparison.OrdinalIgnoreCase) ||
         part.Equals("artifacts", StringComparison.OrdinalIgnoreCase) || part.Equals(".codex", StringComparison.OrdinalIgnoreCase) ||
-        part.Equals(".aws", StringComparison.OrdinalIgnoreCase));
+        part.Equals(".aws", StringComparison.OrdinalIgnoreCase) || part.Equals(".dotnet", StringComparison.OrdinalIgnoreCase) ||
+        part.Equals(".dotnet-home", StringComparison.OrdinalIgnoreCase) || part.Equals(".nuget", StringComparison.OrdinalIgnoreCase) ||
+        part.Equals(".npm-cache", StringComparison.OrdinalIgnoreCase) || part.Equals(".idea", StringComparison.OrdinalIgnoreCase) ||
+        part.Equals(".vs", StringComparison.OrdinalIgnoreCase) || part.Equals("TestResults", StringComparison.OrdinalIgnoreCase));
     Directory.CreateDirectory(to);
     var pending = new Stack<string>();
     pending.Push(from);
@@ -307,10 +310,12 @@ internal static class MutationWorkspace
     long copiedBytes = 0;
     while (pending.TryPop(out var sourceDirectory))
     {
+      cancellationToken.ThrowIfCancellationRequested();
       var destinationDirectory = Path.Combine(to, Path.GetRelativePath(from, sourceDirectory));
       Directory.CreateDirectory(destinationDirectory);
       foreach (var file in Directory.GetFiles(sourceDirectory))
       {
+        cancellationToken.ThrowIfCancellationRequested();
         File.Copy(file, Path.Combine(destinationDirectory, Path.GetFileName(file)), true);
         copiedFiles++;
         copiedBytes += new FileInfo(file).Length;
@@ -326,6 +331,60 @@ internal static class MutationWorkspace
     }
 
     return (copiedFiles, copiedBytes);
+  }
+
+  private static (int Files, long Bytes) CopyProjectGraph(MutationProjects projects, string solutionRoot, string destination, CancellationToken cancellationToken)
+  {
+    var evaluations = new[] { projects.Production }.Concat(projects.TestEvaluations).ToArray();
+    var roots = evaluations.SelectMany(evaluation => evaluation.ProjectPaths).Select(project => Path.GetDirectoryName(project)!)
+        .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(path => path.Length).ToArray();
+    var copiedRoots = new List<string>();
+    var files = 0;
+    long bytes = 0;
+    foreach (var root in roots)
+    {
+      cancellationToken.ThrowIfCancellationRequested();
+      if (copiedRoots.Any(parent => PathSafety.IsWithinDirectory(root, parent)))
+      {
+        continue;
+      }
+      var copied = CopyProject(root, Path.Combine(destination, Path.GetRelativePath(solutionRoot, root)), cancellationToken);
+      files += copied.Files;
+      bytes += copied.Bytes;
+      copiedRoots.Add(root);
+    }
+    var inputs = evaluations.SelectMany(evaluation => evaluation.BuildInputs.Concat(evaluation.CompileFiles)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    inputs.UnionWith(Directory.EnumerateFiles(solutionRoot, "*.slnx", SearchOption.TopDirectoryOnly));
+    inputs.UnionWith(Directory.EnumerateFiles(solutionRoot, "*.sln", SearchOption.TopDirectoryOnly));
+    foreach (var project in evaluations.SelectMany(evaluation => evaluation.ProjectPaths))
+    {
+      inputs.UnionWith(BuildInputs.ProjectConfigurationInputs(project, out _));
+      for (var directory = new DirectoryInfo(Path.GetDirectoryName(project)!); directory is not null && PathSafety.IsWithinDirectory(directory.FullName, solutionRoot); directory = directory.Parent)
+      {
+        foreach (var name in new[] { ".editorconfig", "NuGet.Config", "global.json", "Directory.Build.props", "Directory.Build.targets", "Directory.Packages.props" })
+        {
+          var path = Path.Combine(directory.FullName, name);
+          if (File.Exists(path))
+          {
+            inputs.Add(path);
+          }
+        }
+      }
+    }
+    foreach (var input in inputs)
+    {
+      cancellationToken.ThrowIfCancellationRequested();
+      if (!File.Exists(input) || !PathSafety.IsWithinDirectory(input, solutionRoot) || copiedRoots.Any(root => PathSafety.IsWithinDirectory(input, root)))
+      {
+        continue;
+      }
+      var target = Path.Combine(destination, Path.GetRelativePath(solutionRoot, input));
+      Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+      File.Copy(input, target, true);
+      files++;
+      bytes += new FileInfo(input).Length;
+    }
+    return (files, bytes);
   }
 
   internal static Dictionary<string, CandidateSourceLocation> CreateSourceMappings(MutationProjects projects, PreparedWorkspace workspace)
@@ -390,7 +449,7 @@ internal static class MutationWorkspace
   }
 
   internal static PreparedWorkspace Prepare(MutationProjects projects, List<Candidate> candidates,
-      string session, List<string> diagnostics)
+      string session, List<string> diagnostics, CancellationToken cancellationToken = default)
   {
     var app = projects.App;
     var tests = projects.Tests;
@@ -402,7 +461,7 @@ internal static class MutationWorkspace
         .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
     var solutionRoot = MutationWorkspace.FindProjectTreeRoot(graphProjects);
     var workspaceCopy = Path.Combine(session, "workspace");
-    var copiedWorkspace = MutationWorkspace.CopyProject(solutionRoot, workspaceCopy);
+    var copiedWorkspace = CopyProjectGraph(projects, solutionRoot, workspaceCopy, cancellationToken);
     var appCopy = Path.Combine(workspaceCopy, Path.GetRelativePath(solutionRoot, Path.GetDirectoryName(app)!));
     var clonedTests = new List<string>();
     foreach (var test in tests)
@@ -432,8 +491,8 @@ internal static class MutationWorkspace
     foreach (var directory in formattingPaths.Distinct(StringComparer.OrdinalIgnoreCase).GroupBy(path => Path.GetDirectoryName(path)!, StringComparer.OrdinalIgnoreCase))
     {
       var config = Path.Combine(directory.Key, ".editorconfig");
-      var sections = string.Join("\n", directory.Select(path => $"[{Path.GetFileName(path)}]\ndotnet_diagnostic.IDE0055.severity = none\n"));
-      File.AppendAllText(config, "\n# Generated mutation schemata retain original source line positions.\n" + sections);
+      var sections = string.Join("\n", directory.Select(path => $"[{Path.GetFileName(path)}]\ngenerated_code = true\ndotnet_analyzer_diagnostic.severity = none\n"));
+      File.AppendAllText(config, "\n# Generated mutation schemata use explicit source span maps.\n" + sections);
     }
     MutationRuntimeSource.WriteRuntimeSources(workspaceCopy, solutionRoot, evaluation.SourceOwnership.Select(owner => owner.Project).ToArray(), candidates);
     var instrumentationMs = timer.ElapsedMilliseconds;

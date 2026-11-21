@@ -2,6 +2,11 @@ using System.Text.Json;
 
 using MutationFramework.Sdk;
 
+if (Environment.GetEnvironmentVariable(TestControllerLease.TargetVariable) is { Length: > 0 } controllerTarget)
+{
+  return await TestControllerLease.RunProxyAsync(controllerTarget, args);
+}
+
 static IReadOnlyDictionary<string, IReadOnlyList<string>> ParseResourceLocks(string? value)
 {
   if (string.IsNullOrWhiteSpace(value))
@@ -30,10 +35,18 @@ static IReadOnlyDictionary<string, IReadOnlyList<string>> ParseResourceLocks(str
 
 if (args.Length == 0 || args.Contains("--help") || args.Contains("-h"))
 {
-  Console.WriteLine("mutate run --project <csproj> [--projects <csproj[,csproj]>] --tests <csproj[,csproj]> [--framework tfm] [--workers N] [--execution-mode auto|isolated|batched] [--test-host-isolation per-test|per-mutant|per-batch|per-resource-group] [--mutators id[,id]] [--resource-locks testId=>lock[,lock];testId=>lock] [--cache DIR] [--mutation-result-cache-scope KEY] [--output DIR] [--report json,html] [--timeout seconds] [--filter text]\nmutate discover --project <csproj> --tests <csproj>\nmutate plan --project <csproj> --tests <csproj> [--execution-mode auto|isolated|batched] [--output DIR]\nmutate report <report.json>");
+  Console.WriteLine("Execution progress: --progress-interval seconds (default 10; 0 disables). Periodic counts, active workers, throughput and approximate ETA are written to stderr.");
+  Console.WriteLine("mutate run --project <csproj> [--projects <csproj[,csproj]>] --tests <csproj[,csproj]> [--baseline FILE --baseline-scope KEY] [--save-baseline FILE --baseline-scope KEY] [--framework tfm] [--workers N] [--execution-mode auto|isolated|batched] [--test-host-isolation per-test|per-mutant|per-batch|per-resource-group] [--mutators id[,id]] [--resource-locks testId=>lock[,lock];testId=>lock] [--cache DIR] [--mutation-result-cache-scope KEY] [--output DIR] [--report json,html] [--timeout seconds] [--filter text]\nmutate discover --project <csproj> --tests <csproj>\nmutate plan --project <csproj> --tests <csproj> [--execution-mode auto|isolated|batched] [--output DIR]\nmutate report <report.json>");
+  Console.WriteLine("Recovery: --checkpoint DIR --checkpoint-scope KEY (unchanged external-state attestation; fresh baseline is always validated).\nDeadlines: --timeout seconds (per case), --host-startup-timeout seconds (default 60), --run-timeout seconds (shared run cap; default 1800).\nAuto execution remains isolated; mixed-mutant hosts require explicit same-process equivalence.");
   return 0;
 }
 
+using var runCancellation = new CancellationTokenSource();
+Console.CancelKeyPress += (_, cancellation) =>
+{
+  cancellation.Cancel = !runCancellation.IsCancellationRequested;
+  runCancellation.Cancel();
+};
 var command = args[0];
 try
 {
@@ -90,6 +103,14 @@ try
     OutputDirectory = values.GetValueOrDefault("output", "mutation-results"),
     Report = values.GetValueOrDefault("report", "json,html"),
     TimeoutSeconds = values.TryGetValue("timeout", out var timeout) ? int.Parse(timeout) : 120,
+    MaxRunTimeoutSeconds = values.TryGetValue("run-timeout", out var runTimeout) ? int.Parse(runTimeout) : 1800,
+    HostStartupTimeoutSeconds = values.TryGetValue("host-startup-timeout", out var startupTimeout) ? int.Parse(startupTimeout) : 60,
+    ProgressIntervalSeconds = values.TryGetValue("progress-interval", out var progressInterval) ? int.Parse(progressInterval) : 10,
+    CheckpointDirectory = values.GetValueOrDefault("checkpoint"),
+    CheckpointScopeKey = values.GetValueOrDefault("checkpoint-scope"),
+    BaselinePath = values.GetValueOrDefault("baseline"),
+    SaveBaselinePath = values.GetValueOrDefault("save-baseline"),
+    BaselineScopeKey = values.GetValueOrDefault("baseline-scope"),
     ExecutionMode = values.TryGetValue("execution-mode", out var executionMode) && Enum.TryParse<MutationExecutionMode>(executionMode, true, out var parsedMode) ? parsedMode : MutationExecutionMode.Auto,
     TestHostIsolationPolicy = testHostIsolation,
     TestFilter = values.GetValueOrDefault("filter"),
@@ -108,11 +129,11 @@ try
 
   if (command == "discover")
   {
-    var result = await MutationEngine.DiscoverAsync(options);
+    var result = await MutationEngine.DiscoverAsync(options, runCancellation.Token);
     Console.WriteLine(JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }));
     return 0;
   }
-  var run = command == "plan" ? await MutationEngine.PlanAsync(options) : await MutationEngine.RunAsync(options);
+  var run = command == "plan" ? await MutationEngine.PlanAsync(options, runCancellation.Token) : await MutationEngine.RunAsync(options, runCancellation.Token);
   if (command == "plan")
   {
     Console.WriteLine($"Planned {run.Mutants.Count} mutants; covered {run.Counters.CoveredMutants}; uncovered {run.NoCoverageCount}. Plan report: {run.JsonReportPath}");

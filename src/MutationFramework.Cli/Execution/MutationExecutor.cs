@@ -10,7 +10,8 @@ internal static class MutationExecutor
 {
   internal static async Task<ExecutedMutations> ExecuteAsync(List<Candidate> candidates,
       BaselineCoverage baseline, PlannedMutations plan, ValidatedMutationResults resultCache,
-      MutationExecutionContext context, bool executeMutants, CancellationToken ct)
+      MutationExecutionContext context, bool executeMutants, CancellationToken ct, RunCheckpoint? checkpoint = null,
+      IReadOnlyDictionary<string, MutationResult>? savedBaselineResults = null)
   {
     var opt = context.Options;
     var metrics = context.Metrics;
@@ -23,6 +24,32 @@ internal static class MutationExecutor
     var timer = Stopwatch.StartNew();
     long executionMs = 0, workerInitializationMs = 0;
     var completed = new MutationResult[candidates.Count + compileRejected.Length];
+    var restored = resultCache.Restored.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+    if (checkpoint is not null)
+    {
+      foreach (var pair in checkpoint.Restored)
+      {
+        restored[pair.Key] = pair.Value;
+      }
+    }
+    if (savedBaselineResults is not null)
+    {
+      foreach (var pair in savedBaselineResults)
+      {
+        if (resultIndexByCandidate(candidates, pair.Key) is var index && index >= 0 && pair.Value.Status is MutationStatus.Killed or MutationStatus.Survived)
+        {
+          var item = workItems.FirstOrDefault(work => work.MutantId == pair.Key);
+          var expected = item?.TestIds.Select(id => testsById[id].DisplayName).ToArray() ?? [];
+          if (pair.Value.CoveringTests.Order(StringComparer.Ordinal).SequenceEqual(expected.Order(StringComparer.Ordinal), StringComparer.Ordinal))
+          {
+            restored[pair.Key] = pair.Value with
+            {
+              Diagnostic = "Reused from a verified complete native Mutagen baseline."
+            };
+          }
+        }
+      }
+    }
     var resultIndexById = candidates.Select(candidate => candidate.Id).Concat(compileRejected.Select(result => result.Id))
         .Select((id, index) => (id, index)).ToDictionary(pair => pair.id, pair => pair.index, StringComparer.Ordinal);
     for (var rejectedIndex = 0; rejectedIndex < compileRejected.Length; rejectedIndex++)
@@ -32,16 +59,22 @@ internal static class MutationExecutor
 
     foreach (var candidate in candidates)
     {
-      if (resultCache.Restored.TryGetValue(candidate.Id, out var cachedResult))
+      if (restored.TryGetValue(candidate.Id, out var cachedResult))
       {
         completed[resultIndexById[candidate.Id]] = cachedResult;
       }
     }
 
-    var schedule = ResourceAwareScheduler.Create(plan, baseline, opt, resultCache.Restored, executeMutants, diagnostics);
+    var schedule = ResourceAwareScheduler.Create(plan, baseline, opt, restored, executeMutants, diagnostics);
     var mutationWorkUnits = schedule.WorkUnits;
     var effectiveWorkerCount = schedule.WorkerCount;
     var runCanceled = false;
+    var workerFailed = false;
+    var coveredIds = workItems.Select(item => item.MutantId).ToHashSet(StringComparer.Ordinal);
+    await using var progress = executeMutants
+        ? new MutationProgressReporter(workItems.Count, effectiveWorkerCount,
+            restored.Where(pair => coveredIds.Contains(pair.Key)).Select(pair => pair.Value), TimeSpan.FromSeconds(opt.ProgressIntervalSeconds))
+        : null;
     timer.Restart();
     var workerBusy = new long[effectiveWorkerCount];
     if (!executeMutants)
@@ -69,7 +102,7 @@ internal static class MutationExecutor
       var workers = Enumerable.Range(0, workerBusy.Length).Select(async workerIndex =>
       {
         var busy = Stopwatch.StartNew();
-        using var worker = new MutationWorker(context.TestConsolePath, metrics);
+        using var worker = new MutationWorker(context.TestConsolePath, metrics, Path.Combine(opt.OutputDirectory, "host-logs"), opt.HostStartupTimeoutSeconds);
 
         try
         {
@@ -84,6 +117,7 @@ internal static class MutationExecutor
             }
             ct.ThrowIfCancellationRequested();
             var batch = mutationWorkUnits[batchIndex];
+            using var activeWork = progress!.StartWork();
             if ((opt.TestHostIsolationPolicy is TestHostIsolationPolicy.PerBatch or TestHostIsolationPolicy.PerResourceGroup) &&
                 executionPlan.SelectedMode == MutationExecutionMode.Batched)
             {
@@ -92,6 +126,11 @@ internal static class MutationExecutor
               foreach (var result in batchResults)
               {
                 completed[resultIndexById[result.Id]] = result;
+                progress.Record(result);
+              }
+              if (checkpoint is not null)
+              {
+                await checkpoint.StoreAsync(batchResults, CancellationToken.None);
               }
               var batchFailed = batchResults.Any(result => result.Status is MutationStatus.InfrastructureError or MutationStatus.Timeout);
               if (batchFailed)
@@ -110,12 +149,19 @@ internal static class MutationExecutor
               {
                 continue;
               }
-              var relevant = batch.TestToMutantId.Where(pair => pair.Value == mutantId).Select(pair => testsById[pair.Key]).OrderBy(test => test.Id, StringComparer.Ordinal).ToArray();
+              var relevant = batch.TestToMutantId.Where(pair => pair.Value == mutantId).Select(pair => testsById[pair.Key])
+                  .OrderBy(test => opt.PrioritizeFastTests ? baseline.BaselineByName[test.Id].DurationMs : 0)
+                  .ThenBy(test => test.Id, StringComparer.Ordinal).ToArray();
               var sharedHost = opt.TestHostIsolationPolicy == TestHostIsolationPolicy.PerMutant &&
                   relevant.All(testCase => !perTestIsolationIds.Contains(testCase.Id));
               var mutationResult = await TestExecutor.ExecuteMutantAsync(c, relevant, worker.Session, context, sharedHost, ct);
               var status = mutationResult.Status;
               completed[i] = mutationResult;
+              progress.Record(mutationResult);
+              if (checkpoint is not null)
+              {
+                await checkpoint.StoreAsync([mutationResult], CancellationToken.None);
+              }
               await resultCache.StoreAsync(c, mutationResult, ct);
               if (status is MutationStatus.InfrastructureError or MutationStatus.Timeout)
               {
@@ -145,6 +191,7 @@ internal static class MutationExecutor
       }
       catch (Exception ex)
       {
+        workerFailed = true;
         Interlocked.Increment(ref metrics.WorkerFailures);
         diagnostics.Add("Mutation worker failed: " + ex.Message);
         for (var i = 0; i < candidates.Count; i++)
@@ -153,8 +200,11 @@ internal static class MutationExecutor
         }
       }
       executionMs = timer.ElapsedMilliseconds;
+      progress!.Complete(runCanceled ? "canceled" : workerFailed ? "failed" : "finished");
     }
 
     return new(completed, runCanceled, workerBusy, executionMs, workerInitializationMs, executeMutants);
+
+    static int resultIndexByCandidate(List<Candidate> values, string id) => values.FindIndex(candidate => candidate.Id == id);
   }
 }

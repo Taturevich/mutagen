@@ -38,8 +38,8 @@ addition to the project/assembly dependency checks.
    applies semantic/schema safety checks. Generated files participate in binding
    but are excluded from mutation.
 4. Supported and unsupported candidates share the same identity construction:
-   assembly, framework, relative source path, span start and replacement token.
-   Site identity uses span length instead of the token. Runtime indices are a
+   assembly, framework, relative source path, span start, span length and replacement token.
+   Site identity uses the same source span without the replacement token. Runtime indices are a
    separate, deterministic projection of sorted stable IDs.
 5. `MutationWorkspace` copies the evaluated project tree, materializes external
    linked source, stages configuration and delegates rewriting to

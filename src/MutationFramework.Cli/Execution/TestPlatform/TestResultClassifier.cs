@@ -4,6 +4,16 @@ namespace MutationFramework.Sdk;
 
 internal static class TestResultClassifier
 {
+  internal static Dictionary<string, PlatformTestResult> InterruptedResults(IReadOnlyList<TestCaseDescriptor> tests,
+      IEnumerable<TestResult> observedResults, bool capturePerTestCoverage, IReadOnlyDictionary<string, string>? expectedSites, string error,
+      TestFailureKind interruption = TestFailureKind.Infrastructure)
+  {
+    var observed = observedResults.Where(result => result.Outcome != TestOutcome.None)
+        .GroupBy(result => result.TestCase.Id).ToDictionary(group => group.Key, group => group.First());
+    return tests.ToDictionary(test => test.Id, test => observed.TryGetValue(test.Case.Id, out var result)
+        ? ConvertResult(test, result, capturePerTestCoverage, expectedSites?.GetValueOrDefault(test.Id))
+        : new PlatformTestResult(interruption, error) { State = TestExecutionState.Missing, ExecutionObserved = false }, StringComparer.Ordinal);
+  }
   internal static Dictionary<string, PlatformTestResult> PartialResults(IReadOnlyList<TestCaseDescriptor> tests,
       IEnumerable<TestResult> observedResults, bool capturePerTestCoverage, IReadOnlyDictionary<string, string>? expectedSites = null, IReadOnlySet<Guid>? startedTests = null)
   {

@@ -27,7 +27,8 @@ internal sealed class RunMetrics
   }
   public void StartedTestRunner()
   {
-    Interlocked.Increment(ref ProcessStarts);
+    // One owned proxy and one VSTest controller are started for each session.
+    Interlocked.Add(ref ProcessStarts, 2);
     Interlocked.Increment(ref TestRunnerStarts);
   }
   public void StartedTestHost(int count = 1)

@@ -184,8 +184,15 @@ internal sealed class NullCoalescingMutator : IMutator<BinaryExpressionSyntax>
     }
 
     var result = validate(node, model);
-    yield return new(Metadata, node, $"({node.Right}) ?? ({node.Left})", "coalesce:swap", node.ToString(), result.Supported ? null : result.Reason);
-    yield return new(Metadata, node, node.Left.ToString(), "coalesce:left", node.ToString(), result.Supported ? null : result.Reason);
+    var rightType = model.GetTypeInfo(node.Right).Type;
+    var nullableRight = node.Right.IsKind(SyntaxKind.NullLiteralExpression) || rightType?.IsReferenceType == true ||
+        rightType?.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T || rightType is ITypeParameterSymbol { HasValueTypeConstraint: false };
+    yield return new(Metadata, node, $"({node.Right}) ?? ({node.Left})", "coalesce:swap", node.ToString(), !result.Supported ? result.Reason
+        : nullableRight ? null : "Swapping coalescing operands requires a nullable or reference right operand.");
+    var targetType = model.GetTypeInfo(node).ConvertedType ?? model.GetTypeInfo(node).Type;
+    var leftFits = targetType is not null && model.ClassifyConversion(node.Left, targetType).IsImplicit;
+    yield return new(Metadata, node, node.Left.ToString(), "coalesce:left", node.ToString(), !result.Supported ? result.Reason
+        : leftFits ? null : "The nullable left operand cannot preserve the required result type without coalescing.");
     yield return new(Metadata, node, node.Right.ToString(), "coalesce:right", node.ToString(), result.Supported ? null : result.Reason);
   }
 }

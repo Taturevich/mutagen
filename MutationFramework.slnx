@@ -1,5 +1,10 @@
 <Solution>
   <Folder Name="/Documentation/">
+    <File Path="build.cmd" />
+    <File Path="test.cmd" />
+    <File Path="restore.cmd" />
+    <File Path="format.cmd" />
+    <File Path="scripts/dotnet-entrypoint.ps1" />
     <File Path="README.md" />
     <File Path=".editorconfig" />
     <File Path=".gitattributes" />

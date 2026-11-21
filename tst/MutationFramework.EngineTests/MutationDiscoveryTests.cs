@@ -232,14 +232,14 @@ public sealed class MutationDiscoveryTests
     Assert.That(result.Diagnostics, Has.Some.Contains("string concatenation"));
     Assert.That(result.Diagnostics, Has.None.Contains("user-defined operators"));
     Assert.That(result.Diagnostics, Has.None.Contains("dynamic or unresolved operand type"));
-    Assert.That(result.Diagnostics, Has.None.Contains("expression-tree"));
+    Assert.That(result.Diagnostics, Has.Some.Contains("provider expression-tree"));
     Assert.That(result.Diagnostics, Has.None.Contains("checked arithmetic"));
     Assert.That(result.Candidates.Any(candidate => candidate.Original == "left + right" && candidate.Line == 18), Is.True,
         "A bound user-defined operator can be mutated when the schema validates its replacement.");
     Assert.That(result.Candidates.Any(candidate => candidate.Original == "left + right" && candidate.Line == 19), Is.True,
         "A dynamic binary expression can be mutated when its runtime probe preserves the evaluation site.");
-    Assert.That(result.Candidates.Count(candidate => candidate.Line == 21 && candidate.Operator == "Equality"), Is.EqualTo(2),
-        "Expression-tree operators use an in-tree activation and coverage call.");
+    Assert.That(result.Candidates.Count(candidate => candidate.Line == 21 && candidate.Operator == "Equality"), Is.Zero,
+        "Provider expression trees retain their original shape without runtime calls.");
     Assert.That(result.Candidates.Any(candidate => candidate.Line == 15 && candidate.Operator == "Arithmetic"), Is.True,
         "An arithmetic candidate inside checked remains under the original checked context.");
     Assert.That(result.UnsupportedMutations, Is.Not.Empty);

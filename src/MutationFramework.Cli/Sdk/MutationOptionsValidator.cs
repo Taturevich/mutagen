@@ -53,9 +53,21 @@ internal static class MutationOptionsValidator
   internal static (string App, string[] Tests) ValidateForRun(MutationOptions opt)
   {
     MutationOptionsValidator.ValidateMutatorOptions(opt);
-    if (opt.MaxWorkers < 1 || opt.TimeoutSeconds < 1)
+    if (opt.ProgressIntervalSeconds is < 0 or > 4_294_967)
+    {
+      throw new ArgumentException("Progress interval must be between 0 and 4294967 seconds; use 0 to disable execution progress.");
+    }
+    if (opt.MaxWorkers < 1 || opt.TimeoutSeconds < 1 || opt.MaxRunTimeoutSeconds < 1 || opt.HostStartupTimeoutSeconds < 1)
     {
       throw new ArgumentException("Workers and timeout must be positive.");
+    }
+    if (opt.CheckpointDirectory is not null && string.IsNullOrWhiteSpace(opt.CheckpointScopeKey))
+    {
+      throw new ArgumentException("Checkpoint reuse requires an explicit --checkpoint-scope attesting to unchanged external test state.");
+    }
+    if ((opt.BaselinePath is not null || opt.SaveBaselinePath is not null) && string.IsNullOrWhiteSpace(opt.BaselineScopeKey))
+    {
+      throw new ArgumentException("Saved baseline use requires an explicit baseline scope key attesting to unchanged external test state.");
     }
 
     if (!Enum.IsDefined(opt.ExecutionMode))

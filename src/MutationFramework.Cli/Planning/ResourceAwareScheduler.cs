@@ -11,9 +11,10 @@ internal static class ResourceAwareScheduler
     var resourceGroupsByTestId = baseline.ResourceGroupsByTestId;
     var batchesToExecute = executionPlan.Batches.Where(batch => batch.MutantIds.Any(mutantId =>
         !restoredResults.ContainsKey(mutantId))).ToArray();
-    var mutationWorkUnits = opt.TestHostIsolationPolicy == TestHostIsolationPolicy.PerResourceGroup
+    var splitWorkUnits = opt.TestHostIsolationPolicy == TestHostIsolationPolicy.PerResourceGroup
         ? batchesToExecute.SelectMany(batch => ResourceGroupPlanner.SplitBatch(batch, resourceGroupsByTestId)).ToArray()
         : batchesToExecute;
+    var mutationWorkUnits = splitWorkUnits.Where(batch => batch.MutantIds.Any(mutantId => !restoredResults.ContainsKey(mutantId))).ToArray();
     var activeResourceGroupCount = opt.TestHostIsolationPolicy == TestHostIsolationPolicy.PerResourceGroup
         ? mutationWorkUnits.SelectMany(batch => batch.TestIds).Select(testId => resourceGroupsByTestId[testId].Id)
             .Distinct(StringComparer.Ordinal).Count()
@@ -52,17 +53,16 @@ internal static class ResourceAwareScheduler
     var batchLocks = batches.Select(batch => batch.TestIds
         .SelectMany(testId => resourceLocksByTestId.GetValueOrDefault(testId, []))
         .ToHashSet(StringComparer.Ordinal)).ToArray();
-    for (var left = 0; left < batchLocks.Length; left++)
+    var commonLocks = new HashSet<string>(batchLocks[0], StringComparer.Ordinal);
+    foreach (var locks in batchLocks.Skip(1))
     {
-      for (var right = left + 1; right < batchLocks.Length; right++)
-      {
-        if (!batchLocks[left].Overlaps(batchLocks[right]))
-        {
-          return workerCount;
-        }
-      }
+      commonLocks.IntersectWith(locks);
     }
-
-    return 1;
+    if (commonLocks.Count != 0)
+    {
+      return 1;
+    }
+    var items = batchLocks.Select((locks, index) => new MutationWorkItem(index.ToString(), locks.ToArray(), 0)).ToArray();
+    return MutationPlanner.CountConflictEdges(items) == (long)batchLocks.Length * (batchLocks.Length - 1) / 2 ? 1 : workerCount;
   }
 }

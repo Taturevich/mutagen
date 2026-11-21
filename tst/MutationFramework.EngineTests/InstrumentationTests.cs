@@ -192,7 +192,7 @@ public sealed class InstrumentationTests
 
   [Test]
   [Category("Component")]
-  public void InlineSiteProbesPreserveBoundDynamicCheckedAndExpressionTreeSemantics()
+  public void InlineSiteProbesPreserveBoundDynamicCheckedAndUninstrumentedExpressionTreeSemantics()
   {
     var root = Path.Combine(Path.GetTempPath(), "MutagenInlineSiteProbe", Guid.NewGuid().ToString("N"));
     Directory.CreateDirectory(root);
@@ -235,9 +235,8 @@ public sealed class InstrumentationTests
       var userDefined = candidates.Single(candidate => candidate.Original == "ReadLeftScore() + ReadRightScore()" && candidate.Operator == "Arithmetic");
       var dynamic = candidates.Single(candidate => candidate.Original == "ReadLeftDynamic() + ReadRightDynamic()" && candidate.Operator == "Arithmetic");
       var checkedArithmetic = candidates.Single(candidate => candidate.Original == "ReadLeftInt() + ReadRightInt()" && candidate.Operator == "Arithmetic");
-      var expressionTree = candidates.Single(candidate => candidate.Original == "value + NextOffset()" && candidate.Operator == "Arithmetic");
+      Assert.That(candidates.Any(candidate => candidate.Original == "value + NextOffset()" && candidate.Operator == "Arithmetic"), Is.False);
       Assert.That(checkedArithmetic.UseInlineSiteProbe, Is.True);
-      Assert.That(expressionTree.UseInlineSiteProbe, Is.True);
       Assert.That(userDefined.UseInlineSiteProbe, Is.False);
       Assert.That(dynamic.UseInlineSiteProbe, Is.False);
 
@@ -333,18 +332,14 @@ public sealed class InstrumentationTests
       var offsetCalls = fixture.GetField("OffsetCalls")!;
       offsetCalls.SetValue(null, 0);
       var expression = (LambdaExpression)fixture.GetMethod("Tree")!.Invoke(null, null)!;
-      Assert.That(Saw(expressionTree), Is.False, "Creating an expression tree does not count as evaluating its mutation site.");
       Assert.That(expression.Compile().DynamicInvoke(4), Is.EqualTo(7));
       Assert.That(offsetCalls.GetValue(null), Is.EqualTo(1));
-      Assert.That(Saw(expressionTree), Is.True);
-      Activate(expressionTree);
       clear.Invoke(null, null);
       offsetCalls.SetValue(null, 0);
       var mutatedExpression = (LambdaExpression)fixture.GetMethod("Tree")!.Invoke(null, null)!;
       Assert.That(offsetCalls.GetValue(null), Is.Zero, "Building a mutated expression tree defers operand evaluation.");
-      Assert.That(mutatedExpression.Compile().DynamicInvoke(4), Is.EqualTo(1));
+      Assert.That(mutatedExpression.Compile().DynamicInvoke(4), Is.EqualTo(7));
       Assert.That(offsetCalls.GetValue(null), Is.EqualTo(1));
-      Assert.That(Saw(expressionTree), Is.True);
     }
     finally
     {

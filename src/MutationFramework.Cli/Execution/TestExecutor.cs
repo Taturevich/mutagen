@@ -46,10 +46,10 @@ internal static class TestExecutor
       bool serializeTests = false, bool stopAfterAttributableFailure = false,
       IReadOnlyDictionary<string, string>? expectedSites = null)
   {
-    var totalTimeout = (int)Math.Min(int.MaxValue / 1000L, (long)options.TimeoutSeconds * tests.Length);
+    var totalTimeout = (int)Math.Min(options.MaxRunTimeoutSeconds, (long)options.HostStartupTimeoutSeconds + (long)options.TimeoutSeconds * tests.Length);
     var results = await Task.Run(() => platform.ExecuteMany(tests, null, active, totalTimeout,
         () => metrics.StartedTestHost(), cancellationToken, serializeTests: true, capturePerTestCoverage: true,
-        stopAfterAttributableFailure: stopAfterAttributableFailure, expectedSites: expectedSites), CancellationToken.None);
+        stopAfterAttributableFailure: stopAfterAttributableFailure, expectedSites: expectedSites, testTimeoutSeconds: options.TimeoutSeconds), CancellationToken.None);
     return tests.Select(test =>
     {
       var result = results[test.Id];
@@ -60,14 +60,14 @@ internal static class TestExecutor
   internal static async Task<IReadOnlyDictionary<string, TestRun>> ExecuteTestsWithPerTestCoverage(TestCaseDescriptor[] tests,
       MutationOptions options, TestPlatformSession platform, RunMetrics metrics, CancellationToken cancellationToken)
   {
-    var aggregateTimeout = (int)Math.Min(int.MaxValue, (long)options.TimeoutSeconds * tests.Length);
+    var aggregateTimeout = (int)Math.Min(options.MaxRunTimeoutSeconds, (long)options.HostStartupTimeoutSeconds + (long)options.TimeoutSeconds * tests.Length);
     foreach (var _ in tests)
     {
       Interlocked.Increment(ref metrics.BaselineTests);
     }
 
     var results = await Task.Run(() => platform.ExecuteMany(tests, null, null, aggregateTimeout,
-        () => metrics.StartedTestHost(), cancellationToken, serializeTests: true, capturePerTestCoverage: true),
+        () => metrics.StartedTestHost(), cancellationToken, serializeTests: true, capturePerTestCoverage: true, testTimeoutSeconds: options.TimeoutSeconds),
         CancellationToken.None);
     return tests.ToDictionary(test => test.Id, test =>
     {
@@ -128,9 +128,26 @@ internal static class TestExecutor
       var resourceLocks = relevant.SelectMany(testCase => opt.ResourceLocksByTestId.GetValueOrDefault(testCase.Id, []))
           .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
       var runs = await resourceLockManager.ExecuteAsync(resourceLocks,
-          () => TestExecutor.ExecuteTestsInSharedMutationHost(relevant, opt, candidate.MutantRuntimeId, platform, metrics, ct,
-              serializeTests: true, stopAfterAttributableFailure: true,
-              expectedSites: relevant.ToDictionary(test => test.Id, _ => candidate.SiteRuntimeId)), ct);
+          async () =>
+          {
+            var completed = new List<TestRun>();
+            var tiers = opt.PrioritizeFastTests
+                ? relevant.GroupBy(test => test.SourceAssembly).OrderBy(group => group.Average(test => context.BaselineDurations.GetValueOrDefault(test.Id)))
+                    .ThenBy(group => group.Key, StringComparer.Ordinal).Select(group => group.ToArray()).ToArray()
+                : [relevant];
+            foreach (var tier in tiers)
+            {
+              var tierRuns = await ExecuteTestsInSharedMutationHost(tier, opt, candidate.MutantRuntimeId, platform, metrics, ct,
+                  serializeTests: true, stopAfterAttributableFailure: true,
+                  expectedSites: tier.ToDictionary(test => test.Id, _ => candidate.SiteRuntimeId));
+              completed.AddRange(tierRuns);
+              if (MutationOutcomeClassifier.ClassifyMutant(tierRuns).Status != MutationStatus.Survived)
+              {
+                break;
+              }
+            }
+            return completed;
+          }, ct);
       Interlocked.Add(ref metrics.MutationTests,
           runs.Count(run => run.ExecutionObserved));
       var outcome = MutationOutcomeClassifier.ClassifyMutant(runs);
@@ -178,6 +195,9 @@ internal static class TestExecutor
       }
     }
     var mutationResult = MutationResults.ToResult(candidate, status, relevant.Select(test => test.DisplayName).ToArray(), kill, duration, error);
-    return mutationResult;
+    return mutationResult with
+    {
+      CoveringTests = relevant.OrderBy(test => test.Id, StringComparer.Ordinal).Select(test => test.DisplayName).ToArray()
+    };
   }
 }

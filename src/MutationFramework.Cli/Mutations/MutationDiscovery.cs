@@ -136,7 +136,9 @@ internal static class MutationDiscovery
         {
           var target = description.Node;
           var identityPrefix = fileAssemblyIdentity + "|" + fileFramework + "|" + rel + "|" + target.SpanStart + "|";
-          var id = CacheIdentity.Hash(identityPrefix + description.ReplacementToken);
+          // Nested left-associative expressions share a start position and operator.
+          // Their lengths distinguish separate mutations (for example a || b || c).
+          var id = CacheIdentity.Hash(identityPrefix + target.Span.Length + "|" + description.ReplacementToken);
           var site = CacheIdentity.Hash(identityPrefix + target.Span.Length);
           var line = tree.GetLineSpan(target.Span).StartLinePosition;
           var reason = description.UnsupportedReason ?? GetSchemaCompatibilityFailure(description);
@@ -150,9 +152,7 @@ internal static class MutationDiscovery
           }
           list.Add(new Candidate(id, site, description.Mutator.Category.ToString(), rel, target.SpanStart, target.Span.Length,
               line.Line + 1, line.Character + 1, description.Original, description.Replacement,
-              description.ReplacementToken, "0", "0", target is ExpressionSyntax expression
-                  ? (model.GetTypeInfo(expression).ConvertedType ?? model.GetTypeInfo(expression).Type)?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
-                  : null, description.ApplicationKind)
+              description.ReplacementToken, "0", "0", ResultTypeName(target, model), description.ApplicationKind)
           {
             OwnerProject = ownerProject,
             UseInlineSiteProbe = target is ExpressionSyntax candidateExpression &&
@@ -168,6 +168,22 @@ internal static class MutationDiscovery
     var unique = list.GroupBy(x => (x.OwnerProject, x.File, x.Start, x.Length, x.ReplacementToken)).Select(x => x.First()).OrderBy(x => x.File, StringComparer.Ordinal).ThenBy(x => x.Start).ThenBy(x => x.Id, StringComparer.Ordinal).ToList();
     ReindexCandidates(unique);
     return unique;
+  }
+
+  private static string? ResultTypeName(SyntaxNode node, SemanticModel model)
+  {
+    if (node is not ExpressionSyntax expression)
+    {
+      return null;
+    }
+    var type = model.GetTypeInfo(expression).ConvertedType ?? model.GetTypeInfo(expression).Type;
+    static bool ContainsAnonymousType(ITypeSymbol? symbol) => symbol switch
+    {
+      INamedTypeSymbol named => named.IsAnonymousType || named.TypeArguments.Any(ContainsAnonymousType),
+      IArrayTypeSymbol array => ContainsAnonymousType(array.ElementType),
+      _ => false
+    };
+    return ContainsAnonymousType(type) ? null : type?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
   }
 
   internal static string? GetSchemaCompatibilityFailure(MutationDescription description) => description.ApplicationKind switch
@@ -202,6 +218,13 @@ internal static class MutationDiscovery
 
   internal static (bool Supported, string? Reason) IsSupportedMutationSite(ExpressionSyntax expression, SemanticModel model)
   {
+    // Provider queries inspect expression-tree shape. Even an inactive activation
+    // or coverage call changes that shape and can make an otherwise valid SQL query
+    // untranslatable. Query syntax has implicit lambdas, so it needs its own guard.
+    if (expression.Ancestors().OfType<QueryExpressionSyntax>().Any() || IsExpressionTreeContext(expression, model))
+    {
+      return (false, "provider expression-tree queries cannot contain runtime mutation probes");
+    }
     var operation = model.GetOperation(expression);
     var contextualArrayInitializer = expression is (ArrayCreationExpressionSyntax or ImplicitArrayCreationExpressionSyntax) &&
         model.GetTypeInfo(expression).Type is IArrayTypeSymbol ||

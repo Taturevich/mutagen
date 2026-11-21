@@ -32,8 +32,22 @@ internal sealed class StringConstantMutator : IMutator<InvocationExpressionSynta
       yield break;
     }
 
-    var result = validate(node, model);
-    yield return new(Metadata, node, replacement, method.Name + "->constant", node.ToString(), result.Supported ? null : result.Reason);
+    ExpressionSyntax target = node;
+    string? unsupported = null;
+    if (node.Expression is MemberBindingExpressionSyntax)
+    {
+      if (node.Parent is ConditionalAccessExpressionSyntax access && access.WhenNotNull == node)
+      {
+        target = access;
+        replacement = $"({access.Expression}) is null ? null : ({replacement})";
+      }
+      else
+      {
+        unsupported = "A constant replacement inside a conditional-access chain requires a receiver-preserving schema.";
+      }
+    }
+    var result = validate(target, model);
+    yield return new(Metadata, target, replacement, method.Name + "->constant", target.ToString(), unsupported ?? (result.Supported ? null : result.Reason));
   }
 }
 

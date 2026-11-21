@@ -27,7 +27,26 @@ internal sealed class RemovalMutator : IMutator
       }
       else if (CanRemoveBlock(block))
       {
-        yield return new(Metadata, block, "{ }", "removal:block", block.ToString());
+        var flow = model.AnalyzeDataFlow(block);
+        if (flow?.Succeeded == true && flow.DataFlowsOut.Any(symbol =>
+            (symbol is ILocalSymbol || symbol is IParameterSymbol { RefKind: RefKind.Out }) &&
+            !flow.DefinitelyAssignedOnEntry.Contains(symbol, SymbolEqualityComparer.Default)))
+        {
+          yield return new(Metadata, block, "{ }", "removal:block", block.ToString(),
+              "Removing this block would leave a local or out parameter unassigned on an outgoing path.");
+          yield break;
+        }
+        var replacement = "{ }";
+        if (block.Parent is AnonymousFunctionExpressionSyntax or LocalFunctionStatementSyntax or AccessorDeclarationSyntax)
+        {
+          var owner = model.GetEnclosingSymbol(block.SpanStart) as IMethodSymbol;
+          if (owner is null)
+          {
+            yield break;
+          }
+          replacement = owner.ReturnsVoid ? "{ }" : IsAsyncVoidLike(owner) ? "{ return; }" : "{ return default; }";
+        }
+        yield return new(Metadata, block, replacement, "removal:block", block.ToString());
       }
       yield break;
     }
@@ -91,6 +110,19 @@ internal sealed class RemovalMutator : IMutator
     {
       yield break;
     }
+    if (statementReplacement == ";" && statement.Ancestors().Any(ancestor => ancestor is CatchClauseSyntax))
+    {
+      yield return new(Metadata, statement, statementReplacement, "removal:exception-exit", statement.ToString(),
+          "Removing this exception exit can leave locals unassigned after the catch clause.");
+      yield break;
+    }
+    if (statementReplacement == ";" && statement.Ancestors().OfType<IfStatementSyntax>()
+        .Any(conditional => conditional.Condition.DescendantNodesAndSelf().Any(node => node is SingleVariableDesignationSyntax)))
+    {
+      yield return new(Metadata, statement, statementReplacement, "removal:guard", statement.ToString(),
+          "Removing a control-flow guard can invalidate definite assignment of its pattern or out variables.");
+      yield break;
+    }
 
     yield return new(Metadata, statement, statementReplacement, "removal:" + statement.Kind(), statement.ToString());
   }
@@ -122,7 +154,9 @@ internal sealed class RemovalMutator : IMutator
   }
 
   private static string? GetBlockUnsupportedReason(BlockSyntax block) =>
-      block.Ancestors().Any(ancestor => ancestor is TryStatementSyntax or CatchClauseSyntax or FinallyClauseSyntax)
+      block.Parent is IfStatementSyntax conditional && conditional.Condition.DescendantNodesAndSelf().Any(node => node is SingleVariableDesignationSyntax)
+          ? "Removing a declaration guard can invalidate definite assignment of its pattern or out variables."
+          : block.Ancestors().Any(ancestor => ancestor is TryStatementSyntax or CatchClauseSyntax or FinallyClauseSyntax)
           ? "Removing this nested exception-handling block can make a non-void method fall through; this context is conservatively unsupported."
           : null;
 
@@ -135,7 +169,7 @@ internal sealed class RemovalMutator : IMutator
       return "yield break;";
     }
 
-    return method?.ReturnType.SpecialType == SpecialType.System_Void ? ";" : "return default;";
+    return method is not null && (method.ReturnsVoid || IsAsyncVoidLike(method)) ? ";" : "return default;";
   }
 
   private static string? GetEmptyMethodBodyReplacement(MethodDeclarationSyntax method, IMethodSymbol symbol)
@@ -148,14 +182,16 @@ internal sealed class RemovalMutator : IMutator
     {
       return "yield break;";
     }
-    var asyncVoidLike = symbol.IsAsync &&
-        (symbol.ReturnType.ToDisplayString() is "System.Threading.Tasks.Task" or "System.Threading.Tasks.ValueTask");
+    var asyncVoidLike = IsAsyncVoidLike(symbol);
     if (symbol.ReturnsVoid || asyncVoidLike)
     {
       return ";";
     }
     return "return default;";
   }
+
+  private static bool IsAsyncVoidLike(IMethodSymbol symbol) => symbol.IsAsync &&
+      (symbol.ReturnType.ToDisplayString() is "System.Threading.Tasks.Task" or "System.Threading.Tasks.ValueTask");
 }
 
 internal sealed class InitializationMutator : IMutator

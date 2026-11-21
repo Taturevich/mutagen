@@ -7,6 +7,8 @@ internal sealed class MutationWorker : IDisposable
 {
   private readonly string _consolePath;
   private readonly RunMetrics _metrics;
+  private readonly string? _diagnosticDirectory;
+  private readonly int _startupTimeoutSeconds;
   internal TestPlatformSession Session
   {
     get; private set;
@@ -16,10 +18,12 @@ internal sealed class MutationWorker : IDisposable
     get; private set;
   }
 
-  internal MutationWorker(string consolePath, RunMetrics metrics)
+  internal MutationWorker(string consolePath, RunMetrics metrics, string? diagnosticDirectory = null, int startupTimeoutSeconds = 60)
   {
     _consolePath = consolePath;
     _metrics = metrics;
+    _diagnosticDirectory = diagnosticDirectory;
+    _startupTimeoutSeconds = startupTimeoutSeconds;
     Session = StartSession();
   }
 
@@ -33,7 +37,7 @@ internal sealed class MutationWorker : IDisposable
   private TestPlatformSession StartSession()
   {
     var timer = Stopwatch.StartNew();
-    var session = new TestPlatformSession(_consolePath, _metrics.StartedTestRunner);
+    var session = new TestPlatformSession(_consolePath, _metrics.StartedTestRunner, _diagnosticDirectory, _startupTimeoutSeconds);
     InitializationMs += timer.ElapsedMilliseconds;
     return session;
   }

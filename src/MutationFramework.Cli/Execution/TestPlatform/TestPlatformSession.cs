@@ -1,3 +1,6 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
+
 using Microsoft.TestPlatform.VsTestConsole.TranslationLayer;
 using Microsoft.VisualStudio.TestPlatform.ObjectModel;
 using Microsoft.VisualStudio.TestPlatform.ObjectModel.Client;
@@ -30,11 +33,29 @@ internal sealed class TestPlatformSession : IDisposable
 {
   private readonly VsTestConsoleWrapper _console;
   private bool _disposed;
+  private bool _faulted;
+  private readonly TestControllerLease _controllerLease;
+  private readonly string? _diagnosticDirectory;
+  private readonly int _startupTimeoutSeconds;
 
-  public TestPlatformSession(string testConsolePath, Action processStarted)
+  public TestPlatformSession(string testConsolePath, Action processStarted, string? diagnosticDirectory = null, int startupTimeoutSeconds = 60)
   {
-    _console = new VsTestConsoleWrapper(testConsolePath);
-    _console.StartSession();
+    _diagnosticDirectory = diagnosticDirectory;
+    _startupTimeoutSeconds = startupTimeoutSeconds;
+    _controllerLease = new TestControllerLease(diagnosticDirectory);
+    var parameters = new ConsoleParameters { EnvironmentVariables = _controllerLease.EnvironmentVariables(testConsolePath) };
+    if (diagnosticDirectory is not null)
+    {
+      Directory.CreateDirectory(diagnosticDirectory);
+      parameters.TraceLevel = TraceLevel.Verbose;
+      parameters.LogFilePath = Path.Combine(diagnosticDirectory, Guid.NewGuid().ToString("N") + ".vstest.log");
+    }
+    _console = new VsTestConsoleWrapper(typeof(MutationEngine).Assembly.Location, parameters);
+    try
+    {
+      ControllerDeadline.Run(_console.StartSession, TimeSpan.FromSeconds(startupTimeoutSeconds), terminate: _controllerLease.Terminate);
+    }
+    catch { _controllerLease.Dispose(); throw; }
     processStarted();
   }
 
@@ -43,7 +64,8 @@ internal sealed class TestPlatformSession : IDisposable
   {
     cancellationToken.ThrowIfCancellationRequested();
     var handler = new DiscoveryHandler();
-    _console.DiscoverTests(testAssemblies, "<RunSettings><RunConfiguration><MaxCpuCount>1</MaxCpuCount></RunConfiguration></RunSettings>", new TestPlatformOptions(), handler);
+    ControllerDeadline.Run(() => _console.DiscoverTests(testAssemblies, "<RunSettings><RunConfiguration><MaxCpuCount>1</MaxCpuCount></RunConfiguration></RunSettings>", new TestPlatformOptions(), handler),
+        TimeSpan.FromSeconds(_startupTimeoutSeconds), cancellationToken, () => { _faulted = true; _controllerLease.Terminate(); });
     cancellationToken.ThrowIfCancellationRequested();
     if (handler.Aborted || !handler.Completed)
     {
@@ -76,7 +98,7 @@ internal sealed class TestPlatformSession : IDisposable
   public IReadOnlyDictionary<string, PlatformTestResult> ExecuteMany(IReadOnlyList<TestCaseDescriptor> tests, string? probePath,
       string? activeMutationId, int timeoutSeconds, Action hostStarted, CancellationToken cancellationToken, bool serializeTests = false,
       bool capturePerTestCoverage = false, bool stopAfterAttributableFailure = false,
-      IReadOnlyDictionary<string, string>? expectedSites = null)
+      IReadOnlyDictionary<string, string>? expectedSites = null, int? testTimeoutSeconds = null)
   {
     if (tests.Count == 0)
     {
@@ -95,25 +117,34 @@ internal sealed class TestPlatformSession : IDisposable
     : null);
     using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
     timeout.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
-    using var launcher = new ProcessTestHostLauncher(probePath, activeMutationId, hostStarted, capturePerTestCoverage);
+    using var launcher = new ProcessTestHostLauncher(probePath, activeMutationId, hostStarted, capturePerTestCoverage,
+        _diagnosticDirectory, tests.Select(test => test.Case.Source).Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
+    using var watchdog = new Timer(_ =>
+    {
+      if (handler.HasExpiredTest(TimeSpan.FromSeconds(testTimeoutSeconds ?? timeoutSeconds), TimeSpan.FromSeconds(_startupTimeoutSeconds)))
+      {
+        try
+        {
+          timeout.Cancel();
+        }
+        catch (ObjectDisposedException) { }
+      }
+    }, null, TimeSpan.FromMilliseconds(250), TimeSpan.FromMilliseconds(250));
     using var registration = timeout.Token.Register(() =>
     {
       launcher.ScheduleTermination(TimeSpan.FromSeconds(2));
-      try
-      {
-        _console.CancelTestRun();
-      }
-      catch { }
+      _ = Task.Run(() => { try { _console.CancelTestRun(); } catch { } });
     });
-    PlatformTestResult Interrupted(TestCaseDescriptor test, TestFailureKind kind, string message) => new(kind, message)
-    {
-      State = handler.Started.Contains(test.Case.Id) ? TestExecutionState.Canceled : TestExecutionState.Missing,
-      ExecutionObserved = handler.Started.Contains(test.Case.Id) || handler.Observed.Contains(test.Case.Id)
-    };
     try
     {
       var settings = TestRunSettings.RunSettings(probePath, activeMutationId, serializeTests, capturePerTestCoverage);
-      _console.RunTestsWithCustomTestHost(tests.Select(test => test.Case).ToArray(), settings, new TestPlatformOptions(), handler, launcher);
+      ControllerDeadline.Run(() => _console.RunTestsWithCustomTestHost(tests.Select(test => test.Case).ToArray(), settings, new TestPlatformOptions(), handler, launcher),
+          TimeSpan.FromSeconds(timeoutSeconds + 3L), timeout.Token, () =>
+          {
+            _faulted = true;
+            launcher.TerminateTestHosts();
+            _controllerLease.Terminate();
+          });
     }
     catch (Exception ex)
     {
@@ -125,13 +156,13 @@ internal sealed class TestPlatformSession : IDisposable
       if (timeout.IsCancellationRequested)
       {
         var canceled = cancellationToken.IsCancellationRequested;
-        return tests.ToDictionary(test => test.Id,
-            test => Interrupted(test, canceled ? TestFailureKind.Canceled : TestFailureKind.Timeout, canceled ? "CANCELED: Test execution was canceled." : "TIMEOUT: Test execution timed out."),
-            StringComparer.Ordinal);
+        return TestResultClassifier.InterruptedResults(tests, handler.Results, capturePerTestCoverage, expectedSites,
+            canceled ? "CANCELED: Test execution was canceled." : "TIMEOUT: Test execution timed out.",
+            canceled ? TestFailureKind.Canceled : TestFailureKind.Timeout);
       }
 
-      return tests.ToDictionary(test => test.Id,
-          test => Interrupted(test, TestFailureKind.Infrastructure, "INFRASTRUCTURE: VSTest execution failed: " + ex.Message), StringComparer.Ordinal);
+      return TestResultClassifier.InterruptedResults(tests, handler.Results, capturePerTestCoverage, expectedSites,
+          "INFRASTRUCTURE: VSTest execution failed: " + ex.Message);
     }
     finally
     {
@@ -148,8 +179,8 @@ internal sealed class TestPlatformSession : IDisposable
 
     if (timeout.IsCancellationRequested)
     {
-      return tests.ToDictionary(test => test.Id,
-          test => Interrupted(test, TestFailureKind.Timeout, "TIMEOUT: Test execution timed out."), StringComparer.Ordinal);
+      return TestResultClassifier.InterruptedResults(tests, handler.Results, capturePerTestCoverage, expectedSites,
+          "TIMEOUT: Test execution timed out.", TestFailureKind.Timeout);
     }
 
     if (handler.StoppedAfterAttributableFailure && handler.Completed && !handler.Aborted && handler.Error is null)
@@ -159,8 +190,8 @@ internal sealed class TestPlatformSession : IDisposable
 
     if (!handler.Completed || handler.Aborted || handler.Canceled || handler.Error != null)
     {
-      return tests.ToDictionary(test => test.Id,
-          test => Interrupted(test, TestFailureKind.Infrastructure, "INFRASTRUCTURE: VSTest run did not complete successfully. " + handler.Error), StringComparer.Ordinal);
+      return TestResultClassifier.InterruptedResults(tests, handler.Results, capturePerTestCoverage, expectedSites,
+          "INFRASTRUCTURE: VSTest run did not complete successfully. " + handler.Error);
     }
 
     var expectedIds = tests.Select(test => test.Case.Id).ToHashSet();
@@ -168,7 +199,7 @@ internal sealed class TestPlatformSession : IDisposable
     if (results.Count != tests.Count)
     {
       var error = $"INFRASTRUCTURE: Expected results for {tests.Count} selected tests, received {results.Count}.";
-      return tests.ToDictionary(test => test.Id, test => Interrupted(test, TestFailureKind.Infrastructure, error), StringComparer.Ordinal);
+      return TestResultClassifier.InterruptedResults(tests, handler.Results, capturePerTestCoverage, expectedSites, error);
     }
 
     return tests.ToDictionary(test => test.Id, test => TestResultClassifier.ConvertResult(test, results[test.Case.Id], capturePerTestCoverage, expectedSites?.GetValueOrDefault(test.Id)), StringComparer.Ordinal);
@@ -182,7 +213,15 @@ internal sealed class TestPlatformSession : IDisposable
     }
 
     _disposed = true;
-    _console.EndSession();
+    try
+    {
+      if (!_faulted)
+      {
+        ControllerDeadline.Run(_console.EndSession, TimeSpan.FromSeconds(3), terminate: _controllerLease.Terminate);
+      }
+    }
+    catch (TimeoutException) { Console.Error.WriteLine("Mutagen: terminated VSTest controller after its disposal deadline."); }
+    finally { _controllerLease.Dispose(); }
   }
 
   private static string StableTestId(TestCase test, string stableSource) => string.Join("::", Path.GetFullPath(stableSource), test.ExecutorUri, test.Id.ToString("N"));
@@ -234,9 +273,16 @@ internal sealed class TestPlatformSession : IDisposable
 
   private sealed class RunHandler : ITestRunEventsHandler
   {
-    public readonly List<TestResult> Results = [];
-    public readonly HashSet<Guid> Started = [];
-    public readonly HashSet<Guid> Observed = [];
+    public readonly ConcurrentQueue<TestResult> Results = new();
+    private readonly ConcurrentDictionary<Guid, long> _activeCases = new();
+    private readonly long _created = Stopwatch.GetTimestamp();
+    private long _lastProgress = Stopwatch.GetTimestamp();
+    public bool HasExpiredTest(TimeSpan testTimeout, TimeSpan startupTimeout) =>
+        _activeCases.Values.Any(start => Stopwatch.GetElapsedTime(start) > testTimeout) ||
+        (Results.IsEmpty && _activeCases.IsEmpty && Stopwatch.GetElapsedTime(_created) > startupTimeout) ||
+        (_activeCases.IsEmpty && Stopwatch.GetElapsedTime(Interlocked.Read(ref _lastProgress)) > startupTimeout);
+    private readonly ConcurrentDictionary<Guid, byte> _started = new();
+    public IReadOnlySet<Guid> Started => _started.Keys.ToHashSet();
     public bool Completed
     {
       get; private set;
@@ -284,15 +330,13 @@ internal sealed class TestPlatformSession : IDisposable
       {
         if (_selected.ContainsKey(result.TestCase.Id) && _resultIds.Add(result.TestCase.Id))
         {
-          Results.Add(result);
-          if (result.Outcome != TestOutcome.None)
-          {
-            Observed.Add(result.TestCase.Id);
-          }
+          Results.Enqueue(result);
+          _activeCases.TryRemove(result.TestCase.Id, out _);
+          Interlocked.Exchange(ref _lastProgress, Stopwatch.GetTimestamp());
 
           if (result.Outcome is TestOutcome.Passed or TestOutcome.Failed)
           {
-            Started.Add(result.TestCase.Id);
+            _started.TryAdd(result.TestCase.Id, 0);
           }
           if (Results.Count < _expectedResultCount &&
               result.Outcome == TestOutcome.Failed &&
@@ -338,7 +382,8 @@ internal sealed class TestPlatformSession : IDisposable
       {
         if (_selected.ContainsKey(test.Id))
         {
-          Started.Add(test.Id);
+          _started.TryAdd(test.Id, 0);
+          _activeCases.TryAdd(test.Id, Stopwatch.GetTimestamp());
         }
       }
     }

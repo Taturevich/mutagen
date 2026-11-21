@@ -31,6 +31,7 @@ internal static class MutationPlanning
 
     var preclassified = new List<MutationResult>(compileRejected);
     var workItems = new List<MutationWorkItem>();
+    var sharedMemberships = new Dictionary<string[], string[]>(TestMembershipComparer.Instance);
     foreach (var candidate in candidates)
     {
       var relevant = siteTests.GetValueOrDefault(candidate.SiteId) ?? [];
@@ -40,12 +41,18 @@ internal static class MutationPlanning
       }
       else
       {
-        workItems.Add(new(candidate.Id, relevant.Select(t => t.Id).Order(StringComparer.Ordinal).ToArray(),
+        var membership = relevant.Select(t => t.Id).Order(StringComparer.Ordinal).ToArray();
+        if (!sharedMemberships.TryGetValue(membership, out var shared))
+        {
+          sharedMemberships[membership] = shared = membership;
+        }
+        workItems.Add(new(candidate.Id, shared,
             relevant.Sum(t => baselineByName[t.Id].DurationMs)));
       }
     }
     var coverageComplete = coverageStatuses.Count == testCases.Length && coverageStatuses.Values.All(status => status == CoverageStatus.CoverageSuccess);
-    var executionPlan = MutationPlanner.Build(workItems, preclassified, opt.ExecutionMode, coverageComplete, opt.TimeoutSeconds, opt.MaxWorkers);
+    var executionPlan = MutationPlanner.Build(workItems, preclassified, opt.ExecutionMode, coverageComplete, opt.TimeoutSeconds, opt.MaxWorkers,
+        countConflicts: opt.ExecutionMode == MutationExecutionMode.Batched);
     var perTestIsolationIds = opt.TestHostIsolationPolicy == TestHostIsolationPolicy.PerMutant
         ? workItems.Where(item => item.TestIds.Any(testId => opt.ResourceLocksByTestId.ContainsKey(testId) &&
                 !ExecutionPolicy.SupportsSerializedRunSettings(testsById[testId].ExecutorUri)))
@@ -66,5 +73,20 @@ internal static class MutationPlanning
     }
 
     return new(executionPlan, workItems, perTestIsolationIds, perMutantIsolationIds, coverageComplete);
+  }
+
+  private sealed class TestMembershipComparer : IEqualityComparer<string[]>
+  {
+    internal static readonly TestMembershipComparer Instance = new();
+    public bool Equals(string[]? left, string[]? right) => ReferenceEquals(left, right) || left is not null && right is not null && left.SequenceEqual(right, StringComparer.Ordinal);
+    public int GetHashCode(string[] values)
+    {
+      var hash = new HashCode();
+      foreach (var value in values)
+      {
+        hash.Add(value, StringComparer.Ordinal);
+      }
+      return hash.ToHashCode();
+    }
   }
 }

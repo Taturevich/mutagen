@@ -41,6 +41,7 @@ internal sealed class MutationCompiler(MutationOptions options, ArtifactCache ca
 
     long recoveryInstrumentationMs = 0;
     var recoveryPasses = 0;
+    var recoveryLimit = Math.Clamp(evaluation.SourceOwnership.Count * 2, 2, 16);
     while (true)
     {
       testDlls.Clear();
@@ -51,6 +52,7 @@ internal sealed class MutationCompiler(MutationOptions options, ArtifactCache ca
         var testEvaluation = testEvaluations[testIndex];
         var framework = opt.TargetFramework ?? testEvaluation.TargetFramework;
         var buildArgs = new List<string> { "build", clonedTest, "-c", "Debug", "--no-restore", "--nologo", "-v:q" };
+        buildArgs.Add($"-p:PathMap={workspaceCopy}=/_/mutagen");
         if (!string.IsNullOrWhiteSpace(framework))
         {
           buildArgs.Add("-f");
@@ -86,7 +88,7 @@ internal sealed class MutationCompiler(MutationOptions options, ArtifactCache ca
         if (build.ExitCode != 0)
         {
           var invalidCandidates = MutationSchemaBuilder.FindInvalidCandidates(build.Output, candidates, appCopy, sourceMappings);
-          if (invalidCandidates.Count == 0 || recoveryPasses >= 2)
+          if (invalidCandidates.Count == 0 || recoveryPasses >= recoveryLimit)
           {
             throw new InvalidOperationException("Mutation-enabled project build failed without a safely attributable candidate, or the bounded recovery limit was reached. " + build.Output);
           }
@@ -110,6 +112,7 @@ internal sealed class MutationCompiler(MutationOptions options, ArtifactCache ca
           recoveryTimer.Stop();
           recoveryInstrumentationMs += recoveryTimer.ElapsedMilliseconds;
           recoveryPasses++;
+          Console.Error.WriteLine($"Mutagen: compilation recovery {recoveryPasses}/{recoveryLimit}; rejected {invalidCandidates.Count} mapped candidates; {candidates.Count} remain.");
           retryBuild = true;
           break;
         }

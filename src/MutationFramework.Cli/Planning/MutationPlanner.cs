@@ -19,6 +19,7 @@ public sealed record MutationPlanStatistics(int CoveredMutants, int UncoveredMut
   public long ExactConflictEdges { get; init; } = ConflictEdges;
   /// <summary>True when the legacy ConflictEdges field is capped at Int32.MaxValue.</summary>
   public bool ConflictEdgesOverflow => ExactConflictEdges > int.MaxValue;
+  public bool ConflictEdgesComputed { get; init; } = true;
 }
 
 public sealed record MutationExecutionPlan(IReadOnlyList<MutationBatch> Batches,
@@ -30,7 +31,8 @@ internal sealed record MutationWorkItem(string MutantId, IReadOnlyList<string> T
 internal static class MutationPlanner
 {
   public static MutationExecutionPlan Build(IReadOnlyList<MutationWorkItem> workItems,
-      IReadOnlyList<MutationResult> preclassified, MutationExecutionMode requestedMode, bool coverageComplete, int timeoutSeconds, int maxWorkers)
+      IReadOnlyList<MutationResult> preclassified, MutationExecutionMode requestedMode, bool coverageComplete, int timeoutSeconds, int maxWorkers,
+      bool countConflicts = true)
   {
     var selectedMode = requestedMode switch
     {
@@ -70,6 +72,10 @@ internal static class MutationPlanner
         groups.Add([]);
       }
       groups[groupIndex].Add(item);
+      if (selectedMode != MutationExecutionMode.Batched)
+      {
+        continue;
+      }
       foreach (var test in item.TestIds)
       {
         if (!occupied.TryGetValue(test, out var used))
@@ -114,7 +120,7 @@ internal static class MutationPlanner
       }
     }
 
-    var conflictEdges = CountConflictEdges(workItems);
+    var conflictEdges = countConflicts ? CountConflictEdges(workItems) : 0;
 
     var scheduledGroups = groups.Select(items =>
     {
@@ -142,7 +148,8 @@ internal static class MutationPlanner
             batches.Length, batches.Length == 0 ? 0 : (double)covered / batches.Length,
             workItems.Sum(x => (long)x.TestIds.Count))
         {
-          ExactConflictEdges = conflictEdges
+          ExactConflictEdges = conflictEdges,
+          ConflictEdgesComputed = countConflicts
         }, requestedMode, selectedMode);
   }
 
